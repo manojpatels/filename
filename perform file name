@@ -1,0 +1,35 @@
+FORM F4_FILE_NAME .
+
+  wa_fieldvalues-fieldname = 'P_PRES'.
+  APPEND wa_fieldvalues TO i_fieldvalues.
+  CLEAR wa_fieldvalues.
+
+  wa_fieldvalues-fieldname = 'P_APPL'.
+  APPEND wa_fieldvalues TO i_fieldvalues.
+  CLEAR wa_fieldvalues.
+
+  CALL FUNCTION 'DYNP_VALUES_READ'
+    EXPORTING
+      dyname               = sy-repid
+      dynumb               = sy-dynnr
+    TABLES
+      dynpfields           = i_fieldvalues
+    EXCEPTIONS
+      invalid_abapworkarea = 1
+      invalid_dynprofield  = 2
+      invalid_dynproname   = 3
+      invalid_dynpronummer = 4
+      invalid_request      = 5
+      no_fielddescription  = 6
+      invalid_parameter    = 7
+      undefind_error       = 8
+      double_conversion    = 9
+      stepl_not_found      = 10
+      OTHERS               = 11.
+
+  READ TABLE i_fieldvalues INTO wa_fieldvalues WITH KEY fieldname = 'P_APPL'.
+  IF wa_fieldvalues-fieldvalue = 'X'.
+    PERFORM get_f4_application.
+  ELSE.
+    PERFORM get_f4_presentation.
+  ENDIF.
