@@ -1,0 +1,74 @@
+FORM fetch_pernr .
+  REFRESH i_pa0032.
+  SELECT pernr pnalt endda FROM pa0032 INTO TABLE i_pa0032 FOR ALL ENTRIES IN i_file WHERE pnalt = i_file-pernr."AND ENDDA EQ '99991231'. " Defect 3398
+  SORT i_pa0032 BY endda DESCENDING. "Defect 3840
+
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+* If employee belong to Original First Data
+  IF v_ofd_flag = c_x.
+* Get HR Infotype 0001 data for employee
+    IF i_pa0032[] IS NOT INITIAL.
+      SELECT
+        pernr         " Personnel number
+        endda         " End Date
+        begda         " Start Date
+        bukrs         " Company Code
+        kostl         " Cost Center
+      FROM pa0001
+      INTO TABLE i_pa0001
+      FOR ALL ENTRIES IN i_pa0032
+      WHERE pernr = i_pa0032-pernr.
+      IF sy-subrc = 0.
+        SORT i_pa0001 BY endda DESCENDING.
+* Get cost center master data for company code , profit center values
+        SELECT
+          kokrs       " Controlling Area
+          kostl       " Cost Center
+          datbi       " Valid To Date
+          bukrs       " Company Code
+          prctr       " Profit Center
+        FROM csks     " Cost Center Master Data
+        INTO TABLE i_csks_ofd
+        FOR ALL ENTRIES IN i_pa0001
+        WHERE kostl = i_pa0001-kostl AND
+              datbi GE sy-datum     AND
+              datab LE sy-datum.
+        IF sy-subrc = 0.
+          SORT i_csks_ofd BY kostl.
+        ENDIF.
+
+      ENDIF.
+    ENDIF.
+    " start of defect 17587 rirawat 12/23/2021
+    LOOP AT i_file ASSIGNING FIELD-SYMBOL(<fs_file1>).
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = <fs_file1>-temp18
+        IMPORTING
+          output = <fs_file1>-temp18.
+    ENDLOOP.
+    " end of defect 17587 rirawat 12/23/2021
+* Get cost centers based on cost center charged
+    IF i_file[] IS NOT INITIAL.
+      SELECT
+        kokrs       " Controlling Area
+        kostl       " Cost Center
+        datbi       " Valid To Date
+        bukrs       " Company Code
+        prctr       " Profit Center
+      FROM csks     " Cost Center Master Data
+      APPENDING TABLE i_csks_ofd
+      FOR ALL ENTRIES IN i_file
+      WHERE kostl = i_file-temp18 AND
+            datbi GE sy-datum     AND
+            datab LE sy-datum.
+      IF sy-subrc = 0.
+        SORT i_csks_ofd BY kostl.
+        DELETE ADJACENT DUPLICATES FROM i_csks_ofd COMPARING kostl.
+      ENDIF.
+    ENDIF.
+
+  ENDIF.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+ENDFORM.    
