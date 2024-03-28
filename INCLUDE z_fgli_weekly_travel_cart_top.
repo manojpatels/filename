@@ -1,0 +1,1671 @@
+*----------------------------------------------------------------------*
+* Modification History                                                 *
+*----------------------------------------------------------------------*
+* CKARAVADI  |09/16/2013 |DE1K909752 | Def 6469 : Weekly expense report*
+*                                      -  interface  calculation error *
+************************************************************************
+* LMORALES   |11/26/2015 |DE1K915563 | Def 9763 : Corp Card processing *
+*                                      Concur expense report interface *
+*                                      changes                         *
+* LMORALES   |07/29/2016 |DE1K917006 | Def 10781 :NA Corp Card -       *
+*                                      Concur update to accomodate     *
+*                                      associates with foreign cost    *
+*                                      center                          *
+* CSURYAWANSHI|09/14/2020 |DE1K922973 | Defect 15373 :GS Realignment:  *
+*                          DE1K923042  Concur interface enhancement    *
+*                                      to derive the Region IO by      *
+*                                      employee location               *
+* CSURYAWANSHI|10/15/2020 |DE2K910992 | Defect 15271 : Concur to SAP   *
+*                                       Interface for OFD              *
+*                                                                      *
+* FCJSJ22     |13/01/2023 |DS4K911723 | Defect 20503 :
+                           "Concur OFD postings discrepency by Batch job
+************************************************************************
+* PROGRAMMER|  DATE    |  TASK#   |  DESCRIPTION                       *
+* F463AFJ   |06/12/2023|DS4K913502|Trading partner update for OFD      *
+*                                 |employee while posting concur       *
+*                                 |expenses                            *
+* Comments: F463AFJ/1483                                               *
+************************************************************************
+* FCJSJ22   |09/28/2023|DS4K914985|Changing length of company code     *
+* Defect 1898                     | from 4 to 5 as file is coming with *
+*                                 | leading zero along with oracle cocode *
+
+*&---------------------------------------------------------------------*
+*&  Include           Z_FGLI_WEEKLY_TRAVEL_CART_TOP
+*&---------------------------------------------------------------------*
+
+
+************************************************************************
+*                      TYPE POOLS                                      *
+************************************************************************
+TYPE-POOLS: truxs,
+            slis.
+
+FIELD-SYMBOLS : <fs>,<fs_header>.
+
+
+************************************************************************
+*                      TYPES                                           *
+************************************************************************
+TYPES: BEGIN OF ty_wbs,
+         exp_type(70) TYPE c,
+         suffix(1)    TYPE c,
+       END OF ty_wbs.
+
+TYPES:
+  BEGIN OF t_file,
+*      	       repid             TYPE xblnr1,
+*        	exp_curr(5)       TYPE c,
+*          	psid(4)           TYPE c,
+*        	spent_curr(15)    TYPE c,
+*        	reimb_curr(15)    TYPE c,
+*        	exp_type(70)      TYPE c,
+*        	dept(10)          TYPE c,
+*        	incur_date(10)    TYPE c,
+*        	exp_type2(70)     TYPE c,
+*        	vendor(40)        TYPE c,
+*        	alloc_custom(40)  TYPE c,
+*        	charge_type(40)   TYPE c,
+*        	approal_date(10)  TYPE c,
+*        	pernr(8)          TYPE c,
+*        	incur_curr(5)     TYPE c,
+*        	report(64)        TYPE c,
+*        	purpose(30)       TYPE c,
+*        	alloc_custom2(40) TYPE c,
+*              personal_exp(1)   TYPE c,
+*              charge_type2(20)  TYPE c,
+
+    type(6)                       TYPE c,
+    batch_id(3)                   TYPE c,
+    batch_date(10)                TYPE c,
+    batch_seq(5)                  TYPE c,
+    pernr(12)                     TYPE c,
+    lname(40)                     TYPE c,
+    fname(40)                     TYPE c,
+    m_init(1)                     TYPE c,
+    emp_grp(8)                    TYPE c,
+    org_unit(1)                   TYPE c,
+    org_unit2(1)                  TYPE c,
+    psid(4)                       TYPE c,
+    emp_div(1)                    TYPE c,
+    emp_loc(1)                    TYPE c,
+    emp_dept(10)                  TYPE c,
+    temp1                         TYPE c,
+    temp2                         TYPE c,
+    temp3                         TYPE c,
+    repid_32(32)                  TYPE c,
+    repid(16)                     TYPE c,
+    ext_acc_id(8)                 TYPE c,
+    reimb_curr1(5)                TYPE c,
+    emp_home_cntry(25)            TYPE c,
+    appr_date(10)                 TYPE c,
+    user_custom_date(10)          TYPE c,
+    approal_date(10)              TYPE c,
+    report(64)                    TYPE c,
+    temp4                         TYPE c,
+    temp5                         TYPE c,
+    temp6                         TYPE c,
+    posted_amt(30)                TYPE c,
+    apprv_amt(30)                 TYPE c,
+    temp7                         TYPE c,
+    temp8                         TYPE c,
+    temp9                         TYPE c,
+    temp10                        TYPE c,
+    emp_psid2                     TYPE c,
+    div_charged                   TYPE c,
+    loc_charged                   TYPE c,
+    dept_charged                  TYPE c,
+    psid_bus_unit                 TYPE c,
+    cc_entered(10)                TYPE c,
+    rpt_cust3                     TYPE c,
+    psid_bus_unit2                TYPE c,
+    rpt_custom5                   TYPE c,
+    rpt_custom6                   TYPE c,
+    rpt_custom7                   TYPE c,
+    emp_email                     TYPE c,
+    proj_client_comments          TYPE c,
+    addtl_comments                TYPE c,
+*             rpt_custom11 TYPE c,         "LMORALES Defect 10068
+*    rpt_custom11(4)               TYPE c,       "LMORALES Defect 10068
+    rpt_custom11(5)               TYPE c,       "FCJSJ22 Defect 1898
+    rpt_custom12                  TYPE c,
+    rpt_custom13                  TYPE c,
+    rpt_custom14                  TYPE c,
+    charge_type_value             TYPE c,
+    rpt_custom16                  TYPE c,
+    rpt_custom17                  TYPE c,
+    rpt_custom18                  TYPE c,
+    rpt_custom19                  TYPE c,
+*    rpt_custom20                  TYPE c, "LMORALES Defect 10781
+    rpt_custom20(25)              TYPE c, "LMORALES Defect 10781
+    rpt_entry_unique_key(10)      TYPE c,
+    child_reg                     TYPE c,
+    exp_type(70)                  TYPE c,
+    incur_date(10)                TYPE c,
+    exp_curr(5)                   TYPE c,
+    exchg_rate                    TYPE c,
+    exchg_rate_multi_div          TYPE c,
+    personal_exp                  TYPE c,
+    purpose(30)                   TYPE c,
+    vendor(40)                    TYPE c,
+    vendor_name2(40)              TYPE c,
+    review_box_yes_or_no          TYPE c,
+    paper_rece_code               TYPE c,
+    no_of_emp_attendees           TYPE c,
+    no_of_spouse_attendees        TYPE c,
+    no_of_bus_guest_attendees     TYPE c,
+    org_lvl_data                  TYPE c,
+    rpt_entry_org_unit2           TYPE c,
+    rpt_entry_org_unit3           TYPE c,
+    rpt_entry_org_unit4           TYPE c,
+    rpt_entry_org_unit5           TYPE c,
+    rpt_entry_org_unit6           TYPE c,
+    rpt_entry_custom1             TYPE c,
+    rpt_entry_custom2             TYPE c,
+    rpt_entry_custom3             TYPE c,
+    vat_yes_or_no                 TYPE c,
+    vat_amt                       TYPE c,
+    acc_override_comments         TYPE c,
+    rpt_entry_custom7             TYPE c,
+    rpt_entry_custom8             TYPE c,
+    rpt_entry_custom9             TYPE c,
+    ces_std_project               TYPE c,
+    rpt_entry_custom11            TYPE c,
+    ces_std_city                  TYPE c,
+    ces_std_passg_name            TYPE c,
+    ces_std_ticket_num            TYPE c,
+    ces_std_class_of_service      TYPE c,
+    rpt_entry_custom16            TYPE c,
+    rpt_entry_custom17            TYPE c,
+    rpt_entry_custom18            TYPE c,
+    rpt_entry_custom19            TYPE c,
+    rpt_entry_custom20            TYPE c,
+    rpt_entry_custom21            TYPE c,
+    rpt_entry_custom22            TYPE c,
+    rpt_entry_custom23            TYPE c,
+    rpt_entry_custom24            TYPE c,
+    rpt_entry_custom25            TYPE c,
+    rpt_entry_custom26            TYPE c,
+    rpt_entry_custom27            TYPE c,
+    rpt_entry_custom28            TYPE c,
+    rpt_entry_custom29            TYPE c,
+    rpt_entry_custom30            TYPE c,
+    rpt_entry_custom31            TYPE c,
+    rpt_entry_custom32            TYPE c,
+    rpt_entry_custom33            TYPE c,
+    rpt_entry_custom34            TYPE c,
+    rpt_entry_custom35            TYPE c,
+    rpt_entry_custom36            TYPE c,
+    rpt_entry_custom37            TYPE c,
+    rpt_entry_custom38            TYPE c,
+    rpt_entry_custom39            TYPE c,
+    ces_std                       TYPE c,
+*             amt_spent_in_spend_curr(15) TYPE c,
+*             amt_spent_in_reimb_curr(15) TYPE c,
+    spent_curr(15)                TYPE c,
+    reimb_curr(15)                TYPE c,
+
+    amt_apprv_in_reimb_curr       TYPE c,
+    rpt_entry_future_use1         TYPE c,
+    rpt_entry_future_use2         TYPE c,
+    rpt_entry_future_use3         TYPE c,
+    rpt_entry_future_use4         TYPE c,
+    ccard_acc_num                 TYPE c,
+    name_on_ccard                 TYPE c,
+    code_from_source_system       TYPE c,
+    ref_num_ccard                 TYPE c,
+    unique_key_import_trans       TYPE c,
+    ccard_trans_type              TYPE c,
+    ccard_vend_trans_id           TYPE c,
+    amt_of_charge_spend_curr      TYPE c,
+    amt_of_tax_provided_by_vendor TYPE c,
+    curr_code_for_spend_curr      TYPE c,
+    amt_of_charge_in_bill_curr    TYPE c,
+    curr_code_for_billing_curr    TYPE c,
+    date_charge_merchant          TYPE c,
+    date_charge_posted_to_ccard   TYPE c,
+    charge_desc_merchant          TYPE c,
+    merchant_code                 TYPE c,
+    merchant_name                 TYPE c,
+    merchant_city                 TYPE c,
+    merchant_state                TYPE c,
+    merchant_country              TYPE c,
+    merchant_ref_num              TYPE c,
+    trans_bill_type               TYPE c,
+    exchg_rate_for_bill_curr      TYPE c,
+    amt_due_comp_card             TYPE c,
+    ccard_trans_future_use3       TYPE c,
+    ccard_trans_future_use4       TYPE c,
+    ccard_trans_future_use5       TYPE c,
+    ccard_trans_future_use6       TYPE c,
+    spend_loc(4)                  TYPE c, "country
+    spend_sub_loc(10)             TYPE c, " location from
+    spent_frgn_or_home_country    TYPE c,
+    temp11                        TYPE c,
+    temp12                        TYPE c,
+*             temp13(8) TYPE c,  "LMORALES Defect 9763
+    temp13(20)                    TYPE c,  "LMORALES Defect 9763
+    temp14                        TYPE c,
+*             temp15(10) TYPE c, "LMORALES Defect 9763
+    temp15(20)                    TYPE c,  "LMORALES Defect 9763
+    temp16                        TYPE c,
+    gl_acct(10)                   TYPE c,
+    dr_cr_ind(2)                  TYPE c,
+    amt_to_be_paid(30)            TYPE c, "receipt amt
+    temp17                        TYPE c,
+    miles_business(10)            TYPE c,
+    miles_personal                TYPE c,
+    no_of_passengers              TYPE c,
+    vehicle_id                    TYPE c,
+    car_mileage_future_use1       TYPE c,
+    car_mileage_future_use2       TYPE c,
+    orig_cash_adv_amt             TYPE c,
+    curr_code_alpha               TYPE c,
+    curr_code_numeric             TYPE c,
+    exchg_rate_used               TYPE c,
+    reimb_curr_code_alpha         TYPE c,
+    reimb_curr_code_numeric       TYPE c,
+    date_of_cash_adv_issue        TYPE c,
+    method_of_pay_cash_adv        TYPE c,
+    advance_type                  TYPE c,
+    date_of_cash_adv_req          TYPE c,
+    unique_system_key             TYPE c,
+    cash_adv_future_use2          TYPE c,
+    unique_system_key2            TYPE c,
+    perc_of_rpt_entry(5)          TYPE c, "Defect 2612 Defect 6469
+    alloc_custom1                 TYPE c,
+    alloc_custom2                 TYPE c,
+    psid1                         TYPE c,
+    div_charged2(15)              TYPE c,   "CoCode-Controlling area
+    loc_charged2(10)              TYPE c,
+    dept(10)                      TYPE c,  "Costcenter
+    psid_for_cc                   TYPE c,
+    cc_charged(10)                TYPE c,
+    temp18(10)                    TYPE c,
+    psid_for_charge_type          TYPE c,
+"Begin of defect 2063 FCJSJ22 extending length from 20 to 30 chars.
+*    charge_type2(20)              TYPE c,      "billable / project
+    charge_type2(30)              TYPE c,      "billable / project
+"end of defect 2063
+    charge_type(40)               TYPE c,
+    alloc_custom(40)              TYPE c,   "Client - billable
+    rest(1)                       TYPE c,
+  END OF t_file,
+
+  BEGIN OF t_file_emp,
+*      	       repid             TYPE xblnr1,
+*        	exp_curr(5)       TYPE c,
+*          	psid(4)           TYPE c,
+*        	spent_curr(15)    TYPE c,
+*        	reimb_curr(15)    TYPE c,
+*        	exp_type(70)      TYPE c,
+*        	dept(10)          TYPE c,
+*        	incur_date(10)    TYPE c,
+*        	exp_type2(70)     TYPE c,
+*        	vendor(40)        TYPE c,
+*        	alloc_custom(40)  TYPE c,
+*        	charge_type(40)   TYPE c,
+*        	approal_date(10)  TYPE c,
+*        	pernr(8)          TYPE c,
+*        	incur_curr(5)     TYPE c,
+*        	report(64)        TYPE c,
+*        	purpose(30)       TYPE c,
+*        	alloc_custom2(40) TYPE c,
+*              personal_exp(1)   TYPE c,
+*              charge_type2(20)  TYPE c,
+
+    type(6)                       TYPE c,
+    batch_id(3)                   TYPE c,
+    batch_date(10)                TYPE c,
+    batch_seq(5)                  TYPE c,
+    pernr(12)                     TYPE c,
+    lname(40)                     TYPE c,
+    fname(40)                     TYPE c,
+    m_init(1)                     TYPE c,
+    emp_grp(8)                    TYPE c,
+    org_unit(1)                   TYPE c,
+    org_unit2(1)                  TYPE c,
+    psid(4)                       TYPE c,
+    emp_div(1)                    TYPE c,
+    emp_loc(1)                    TYPE c,
+    emp_dept(10)                  TYPE c,
+    temp1                         TYPE c,
+    temp2                         TYPE c,
+    temp3                         TYPE c,
+    repid_32(32)                  TYPE c,
+    repid(16)                     TYPE c,
+    ext_acc_id(8)                 TYPE c,
+    reimb_curr1(5)                TYPE c,
+    emp_home_cntry(25)            TYPE c,
+    appr_date(10)                 TYPE c,
+    user_custom_date(10)          TYPE c,
+    approal_date(10)              TYPE c,
+    report(64)                    TYPE c,
+    temp4                         TYPE c,
+    temp5                         TYPE c,
+    temp6                         TYPE c,
+    posted_amt(30)                TYPE c,
+    apprv_amt(30)                 TYPE c,
+    temp7                         TYPE c,
+    temp8                         TYPE c,
+    temp9                         TYPE c,
+    temp10                        TYPE c,
+    emp_psid2                     TYPE c,
+    div_charged                   TYPE c,
+    loc_charged                   TYPE c,
+    dept_charged                  TYPE c,
+    psid_bus_unit                 TYPE c,
+    cc_entered(10)                TYPE c,
+    rpt_cust3                     TYPE c,
+    psid_bus_unit2                TYPE c,
+    rpt_custom5                   TYPE c,
+    rpt_custom6                   TYPE c,
+    rpt_custom7                   TYPE c,
+    emp_email                     TYPE c,
+    proj_client_comments          TYPE c,
+    addtl_comments                TYPE c,
+    rpt_custom11                  TYPE c,
+    rpt_custom12                  TYPE c,
+    rpt_custom13                  TYPE c,
+    rpt_custom14                  TYPE c,
+    charge_type_value             TYPE c,
+    rpt_custom16                  TYPE c,
+    rpt_custom17                  TYPE c,
+    rpt_custom18                  TYPE c,
+    rpt_custom19                  TYPE c,
+    rpt_custom20                  TYPE c,
+    rpt_entry_unique_key(10)      TYPE c,
+    child_reg                     TYPE c,
+    exp_type(70)                  TYPE c,
+    incur_date(10)                TYPE c,
+    exp_curr(5)                   TYPE c,
+    exchg_rate                    TYPE c,
+    exchg_rate_multi_div          TYPE c,
+    personal_exp                  TYPE c,
+    purpose(30)                   TYPE c,
+    vendor(40)                    TYPE c,
+    vendor_name2(40)              TYPE c,
+    review_box_yes_or_no          TYPE c,
+    paper_rece_code               TYPE c,
+    no_of_emp_attendees           TYPE c,
+    no_of_spouse_attendees        TYPE c,
+    no_of_bus_guest_attendees     TYPE c,
+    org_lvl_data                  TYPE c,
+    rpt_entry_org_unit2           TYPE c,
+    rpt_entry_org_unit3           TYPE c,
+    rpt_entry_org_unit4           TYPE c,
+    rpt_entry_org_unit5           TYPE c,
+    rpt_entry_org_unit6           TYPE c,
+    rpt_entry_custom1             TYPE c,
+    rpt_entry_custom2             TYPE c,
+    rpt_entry_custom3             TYPE c,
+    vat_yes_or_no                 TYPE c,
+    vat_amt                       TYPE c,
+    acc_override_comments         TYPE c,
+    rpt_entry_custom7             TYPE c,
+    rpt_entry_custom8             TYPE c,
+    rpt_entry_custom9             TYPE c,
+    ces_std_project               TYPE c,
+    rpt_entry_custom11            TYPE c,
+    ces_std_city                  TYPE c,
+    ces_std_passg_name            TYPE c,
+    ces_std_ticket_num            TYPE c,
+    ces_std_class_of_service      TYPE c,
+    rpt_entry_custom16            TYPE c,
+    rpt_entry_custom17            TYPE c,
+    rpt_entry_custom18            TYPE c,
+    rpt_entry_custom19            TYPE c,
+    rpt_entry_custom20            TYPE c,
+    rpt_entry_custom21            TYPE c,
+    rpt_entry_custom22            TYPE c,
+    rpt_entry_custom23            TYPE c,
+    rpt_entry_custom24            TYPE c,
+    rpt_entry_custom25            TYPE c,
+    rpt_entry_custom26            TYPE c,
+    rpt_entry_custom27            TYPE c,
+    rpt_entry_custom28            TYPE c,
+    rpt_entry_custom29            TYPE c,
+    rpt_entry_custom30            TYPE c,
+    rpt_entry_custom31            TYPE c,
+    rpt_entry_custom32            TYPE c,
+    rpt_entry_custom33            TYPE c,
+    rpt_entry_custom34            TYPE c,
+    rpt_entry_custom35            TYPE c,
+    rpt_entry_custom36            TYPE c,
+    rpt_entry_custom37            TYPE c,
+    rpt_entry_custom38            TYPE c,
+    rpt_entry_custom39            TYPE c,
+    ces_std                       TYPE c,
+*             amt_spent_in_spend_curr(15) TYPE c,
+*             amt_spent_in_reimb_curr(15) TYPE c,
+    spent_curr(15)                TYPE c,
+    reimb_curr(15)                TYPE c,
+
+    amt_apprv_in_reimb_curr       TYPE c,
+    rpt_entry_future_use1         TYPE c,
+    rpt_entry_future_use2         TYPE c,
+    rpt_entry_future_use3         TYPE c,
+    rpt_entry_future_use4         TYPE c,
+    ccard_acc_num                 TYPE c,
+    name_on_ccard                 TYPE c,
+    code_from_source_system       TYPE c,
+    ref_num_ccard                 TYPE c,
+    unique_key_import_trans       TYPE c,
+    ccard_trans_type              TYPE c,
+    ccard_vend_trans_id           TYPE c,
+    amt_of_charge_spend_curr      TYPE c,
+    amt_of_tax_provided_by_vendor TYPE c,
+    curr_code_for_spend_curr      TYPE c,
+    amt_of_charge_in_bill_curr    TYPE c,
+    curr_code_for_billing_curr    TYPE c,
+    date_charge_merchant          TYPE c,
+    date_charge_posted_to_ccard   TYPE c,
+    charge_desc_merchant          TYPE c,
+    merchant_code                 TYPE c,
+    merchant_name                 TYPE c,
+    merchant_city                 TYPE c,
+    merchant_state                TYPE c,
+    merchant_country              TYPE c,
+    merchant_ref_num              TYPE c,
+    trans_bill_type               TYPE c,
+    exchg_rate_for_bill_curr      TYPE c,
+    amt_due_comp_card             TYPE c,
+    ccard_trans_future_use3       TYPE c,
+    ccard_trans_future_use4       TYPE c,
+    ccard_trans_future_use5       TYPE c,
+    ccard_trans_future_use6       TYPE c,
+    spend_loc(4)                  TYPE c, "country
+    spend_sub_loc(10)             TYPE c, " location from
+    spent_frgn_or_home_country    TYPE c,
+    temp11                        TYPE c,
+    temp12                        TYPE c,
+    temp13                        TYPE c,
+    temp14                        TYPE c,
+    temp15(10)                    TYPE c,
+    temp16                        TYPE c,
+    gl_acct(10)                   TYPE c,
+    dr_cr_ind(2)                  TYPE c,
+    amt_to_be_paid(30)            TYPE c, "receipt amt
+    temp17                        TYPE c,
+    miles_business(10)            TYPE c,
+    miles_personal                TYPE c,
+    no_of_passengers              TYPE c,
+    vehicle_id                    TYPE c,
+    car_mileage_future_use1       TYPE c,
+    car_mileage_future_use2       TYPE c,
+    orig_cash_adv_amt             TYPE c,
+    curr_code_alpha               TYPE c,
+    curr_code_numeric             TYPE c,
+    exchg_rate_used               TYPE c,
+    reimb_curr_code_alpha         TYPE c,
+    reimb_curr_code_numeric       TYPE c,
+    date_of_cash_adv_issue        TYPE c,
+    method_of_pay_cash_adv        TYPE c,
+    advance_type                  TYPE c,
+    date_of_cash_adv_req          TYPE c,
+    unique_system_key             TYPE c,
+    cash_adv_future_use2          TYPE c,
+    unique_system_key2            TYPE c,
+    perc_of_rpt_entry(5)          TYPE c, "Defect 2612 Defect 6469
+    alloc_custom1                 TYPE c,
+    alloc_custom2                 TYPE c,
+    psid1                         TYPE c,
+    div_charged2(15)              TYPE c,   "CoCode-Controlling area
+    loc_charged2(10)              TYPE c,
+    dept(10)                      TYPE c,  "Costcenter
+    psid_for_cc                   TYPE c,
+    cc_charged(10)                TYPE c,
+    temp18(10)                    TYPE c,
+    psid_for_charge_type          TYPE c,
+    charge_type2(20)              TYPE c,      "billable / project
+    charge_type(40)               TYPE c,
+    alloc_custom(40)              TYPE c,   "Client - billable
+    rest(1)                       TYPE c,
+  END OF t_file_emp,
+* For Cross Company Code.
+
+  BEGIN OF t_file_cc,
+*      	       repid             TYPE xblnr1,
+*        	exp_curr(5)       TYPE c,
+*          	psid(4)           TYPE c,
+*        	spent_curr(15)    TYPE c,
+*        	reimb_curr(15)    TYPE c,
+*        	exp_type(70)      TYPE c,
+*        	dept(10)          TYPE c,
+*        	incur_date(10)    TYPE c,
+*        	exp_type2(70)     TYPE c,
+*        	vendor(40)        TYPE c,
+*        	alloc_custom(40)  TYPE c,
+*        	charge_type(40)   TYPE c,
+*        	approal_date(10)  TYPE c,
+*        	pernr(8)          TYPE c,
+*        	incur_curr(5)     TYPE c,
+*        	report(64)        TYPE c,
+*        	purpose(30)       TYPE c,
+*        	alloc_custom2(40) TYPE c,
+*              personal_exp(1)   TYPE c,
+*              charge_type2(20)  TYPE c,
+
+    type(6)                       TYPE c,
+    batch_id(3)                   TYPE c,
+    batch_date(10)                TYPE c,
+    batch_seq(5)                  TYPE c,
+*    pernr(8)                      TYPE c,
+    pernr(12)                     TYPE c,  " changed by rirawat defect 19183   , pernr lengh is diff here so file data is nnot getting transferred to card employee table correctly
+    lname(40)                     TYPE c,
+    fname(40)                     TYPE c,
+    m_init(1)                     TYPE c,
+    emp_grp(8)                    TYPE c,
+    org_unit(1)                   TYPE c,
+    org_unit2(1)                  TYPE c,
+    psid(4)                       TYPE c,
+    emp_div(1)                    TYPE c,
+    emp_loc(1)                    TYPE c,
+    emp_dept(10)                  TYPE c,
+    temp1                         TYPE c,
+    temp2                         TYPE c,
+    temp3                         TYPE c,
+    repid_32(32)                  TYPE c,
+    repid(16)                     TYPE c,
+    ext_acc_id(8)                 TYPE c,
+    reimb_curr1(5)                TYPE c,
+    emp_home_cntry(25)            TYPE c,
+    appr_date(10)                 TYPE c,
+    user_custom_date(10)          TYPE c,
+    approal_date(10)              TYPE c,
+    report(64)                    TYPE c,
+    temp4                         TYPE c,
+    temp5                         TYPE c,
+    temp6                         TYPE c,
+    posted_amt(30)                TYPE c,
+    apprv_amt(30)                 TYPE c,
+    temp7                         TYPE c,
+    temp8                         TYPE c,
+    temp9                         TYPE c,
+    temp10                        TYPE c,
+    emp_psid2                     TYPE c,
+    div_charged                   TYPE c,
+    loc_charged                   TYPE c,
+    dept_charged                  TYPE c,
+    psid_bus_unit                 TYPE c,
+    cc_entered(10)                TYPE c,
+    rpt_cust3                     TYPE c,
+    psid_bus_unit2                TYPE c,
+    rpt_custom5                   TYPE c,
+    rpt_custom6                   TYPE c,
+    rpt_custom7                   TYPE c,
+    emp_email                     TYPE c,
+    proj_client_comments          TYPE c,
+    addtl_comments                TYPE c,
+    rpt_custom11                  TYPE c,
+    rpt_custom12                  TYPE c,
+    rpt_custom13                  TYPE c,
+    rpt_custom14                  TYPE c,
+    charge_type_value             TYPE c,
+    rpt_custom16                  TYPE c,
+    rpt_custom17                  TYPE c,
+    rpt_custom18                  TYPE c,
+    rpt_custom19                  TYPE c,
+    rpt_custom20                  TYPE c,
+    rpt_entry_unique_key(10)      TYPE c,
+    child_reg                     TYPE c,
+    exp_type(70)                  TYPE c,
+    incur_date(10)                TYPE c,
+    exp_curr(5)                   TYPE c,
+    exchg_rate                    TYPE c,
+    exchg_rate_multi_div          TYPE c,
+    personal_exp                  TYPE c,
+    purpose(30)                   TYPE c,
+    vendor(40)                    TYPE c,
+    vendor_name2(40)              TYPE c,
+    review_box_yes_or_no          TYPE c,
+    paper_rece_code               TYPE c,
+    no_of_emp_attendees           TYPE c,
+    no_of_spouse_attendees        TYPE c,
+    no_of_bus_guest_attendees     TYPE c,
+    org_lvl_data                  TYPE c,
+    rpt_entry_org_unit2           TYPE c,
+    rpt_entry_org_unit3           TYPE c,
+    rpt_entry_org_unit4           TYPE c,
+    rpt_entry_org_unit5           TYPE c,
+    rpt_entry_org_unit6           TYPE c,
+    rpt_entry_custom1             TYPE c,
+    rpt_entry_custom2             TYPE c,
+    rpt_entry_custom3             TYPE c,
+    vat_yes_or_no                 TYPE c,
+    vat_amt                       TYPE c,
+    acc_override_comments         TYPE c,
+    rpt_entry_custom7             TYPE c,
+    rpt_entry_custom8             TYPE c,
+    rpt_entry_custom9             TYPE c,
+    ces_std_project               TYPE c,
+    rpt_entry_custom11            TYPE c,
+    ces_std_city                  TYPE c,
+    ces_std_passg_name            TYPE c,
+    ces_std_ticket_num            TYPE c,
+    ces_std_class_of_service      TYPE c,
+    rpt_entry_custom16            TYPE c,
+    rpt_entry_custom17            TYPE c,
+    rpt_entry_custom18            TYPE c,
+    rpt_entry_custom19            TYPE c,
+    rpt_entry_custom20            TYPE c,
+    rpt_entry_custom21            TYPE c,
+    rpt_entry_custom22            TYPE c,
+    rpt_entry_custom23            TYPE c,
+    rpt_entry_custom24            TYPE c,
+    rpt_entry_custom25            TYPE c,
+    rpt_entry_custom26            TYPE c,
+    rpt_entry_custom27            TYPE c,
+    rpt_entry_custom28            TYPE c,
+    rpt_entry_custom29            TYPE c,
+    rpt_entry_custom30            TYPE c,
+    rpt_entry_custom31            TYPE c,
+    rpt_entry_custom32            TYPE c,
+    rpt_entry_custom33            TYPE c,
+    rpt_entry_custom34            TYPE c,
+    rpt_entry_custom35            TYPE c,
+    rpt_entry_custom36            TYPE c,
+    rpt_entry_custom37            TYPE c,
+    rpt_entry_custom38            TYPE c,
+    rpt_entry_custom39            TYPE c,
+    ces_std                       TYPE c,
+*             amt_spent_in_spend_curr(15) TYPE c,
+*             amt_spent_in_reimb_curr(15) TYPE c,
+    spent_curr(15)                TYPE c,
+    reimb_curr(15)                TYPE c,
+
+    amt_apprv_in_reimb_curr       TYPE c,
+    rpt_entry_future_use1         TYPE c,
+    rpt_entry_future_use2         TYPE c,
+    rpt_entry_future_use3         TYPE c,
+    rpt_entry_future_use4         TYPE c,
+    ccard_acc_num                 TYPE c,
+    name_on_ccard                 TYPE c,
+    code_from_source_system       TYPE c,
+    ref_num_ccard                 TYPE c,
+    unique_key_import_trans       TYPE c,
+    ccard_trans_type              TYPE c,
+    ccard_vend_trans_id           TYPE c,
+    amt_of_charge_spend_curr      TYPE c,
+    amt_of_tax_provided_by_vendor TYPE c,
+    curr_code_for_spend_curr      TYPE c,
+    amt_of_charge_in_bill_curr    TYPE c,
+    curr_code_for_billing_curr    TYPE c,
+    date_charge_merchant          TYPE c,
+    date_charge_posted_to_ccard   TYPE c,
+    charge_desc_merchant          TYPE c,
+    merchant_code                 TYPE c,
+    merchant_name                 TYPE c,
+    merchant_city                 TYPE c,
+    merchant_state                TYPE c,
+    merchant_country              TYPE c,
+    merchant_ref_num              TYPE c,
+    trans_bill_type               TYPE c,
+    exchg_rate_for_bill_curr      TYPE c,
+    amt_due_comp_card             TYPE c,
+    ccard_trans_future_use3       TYPE c,
+    ccard_trans_future_use4       TYPE c,
+    ccard_trans_future_use5       TYPE c,
+    ccard_trans_future_use6       TYPE c,
+    spend_loc(4)                  TYPE c, "country
+    spend_sub_loc(10)             TYPE c, " location from
+    spent_frgn_or_home_country    TYPE c,
+    temp11                        TYPE c,
+    temp12                        TYPE c,
+    temp13                        TYPE c,
+    temp14                        TYPE c,
+    temp15(10)                    TYPE c,
+    temp16                        TYPE c,
+    gl_acct(10)                   TYPE c,
+    dr_cr_ind(2)                  TYPE c,
+    amt_to_be_paid(30)            TYPE c, "receipt amt
+    temp17                        TYPE c,
+    miles_business(10)            TYPE c,
+    miles_personal                TYPE c,
+    no_of_passengers              TYPE c,
+    vehicle_id                    TYPE c,
+    car_mileage_future_use1       TYPE c,
+    car_mileage_future_use2       TYPE c,
+    orig_cash_adv_amt             TYPE c,
+    curr_code_alpha               TYPE c,
+    curr_code_numeric             TYPE c,
+    exchg_rate_used               TYPE c,
+    reimb_curr_code_alpha         TYPE c,
+    reimb_curr_code_numeric       TYPE c,
+    date_of_cash_adv_issue        TYPE c,
+    method_of_pay_cash_adv        TYPE c,
+    advance_type                  TYPE c,
+    date_of_cash_adv_req          TYPE c,
+    unique_system_key             TYPE c,
+    cash_adv_future_use2          TYPE c,
+    unique_system_key2            TYPE c,
+    perc_of_rpt_entry(5)          TYPE c, "Defect 6469
+    alloc_custom1                 TYPE c,
+    alloc_custom2                 TYPE c,
+    psid1                         TYPE c,
+    div_charged2(15)              TYPE c,   "CoCode-Controlling area
+    loc_charged2(10)              TYPE c,
+    dept(10)                      TYPE c,  "Costcenter
+    psid_for_cc                   TYPE c,
+    cc_charged(10)                TYPE c,
+    temp18(10)                    TYPE c,
+    psid_for_charge_type          TYPE c,
+    charge_type2(20)              TYPE c,      "billable / project
+    charge_type                   TYPE ps_posid,
+    alloc_custom(40)              TYPE c,   "Client - billable
+    rest(1)                       TYPE c,
+  END OF t_file_cc,
+
+
+  BEGIN OF t_file_cc2,
+*      	       repid             TYPE xblnr1,
+*        	exp_curr(5)       TYPE c,
+*          	psid(4)           TYPE c,
+*        	spent_curr(15)    TYPE c,
+*        	reimb_curr(15)    TYPE c,
+*        	exp_type(70)      TYPE c,
+*        	dept(10)          TYPE c,
+*        	incur_date(10)    TYPE c,
+*        	exp_type2(70)     TYPE c,
+*        	vendor(40)        TYPE c,
+*        	alloc_custom(40)  TYPE c,
+*        	charge_type(40)   TYPE c,
+*        	approal_date(10)  TYPE c,
+*        	pernr(8)          TYPE c,
+*        	incur_curr(5)     TYPE c,
+*        	report(64)        TYPE c,
+*        	purpose(30)       TYPE c,
+*        	alloc_custom2(40) TYPE c,
+*              personal_exp(1)   TYPE c,
+*              charge_type2(20)  TYPE c,
+
+    type(6)                       TYPE c,
+    batch_id(3)                   TYPE c,
+    batch_date(10)                TYPE c,
+    batch_seq(5)                  TYPE c,
+    pernr(8)                      TYPE c,
+    lname(40)                     TYPE c,
+    fname(40)                     TYPE c,
+    m_init(1)                     TYPE c,
+    emp_grp(8)                    TYPE c,
+    org_unit(1)                   TYPE c,
+    org_unit2(1)                  TYPE c,
+    psid(4)                       TYPE c,
+    emp_div(1)                    TYPE c,
+    emp_loc(1)                    TYPE c,
+    emp_dept(10)                  TYPE c,
+    temp1                         TYPE c,
+    temp2                         TYPE c,
+    temp3                         TYPE c,
+    repid_32(32)                  TYPE c,
+    repid(16)                     TYPE c,
+    ext_acc_id(8)                 TYPE c,
+    reimb_curr1(5)                TYPE c,
+    emp_home_cntry(25)            TYPE c,
+    appr_date(10)                 TYPE c,
+    user_custom_date(10)          TYPE c,
+    approal_date(10)              TYPE c,
+    report(64)                    TYPE c,
+    temp4                         TYPE c,
+    temp5                         TYPE c,
+    temp6                         TYPE c,
+    posted_amt(30)                TYPE c,
+    apprv_amt(30)                 TYPE c,
+    temp7                         TYPE c,
+    temp8                         TYPE c,
+    temp9                         TYPE c,
+    temp10                        TYPE c,
+    emp_psid2                     TYPE c,
+    div_charged                   TYPE c,
+    loc_charged                   TYPE c,
+    dept_charged                  TYPE c,
+    psid_bus_unit                 TYPE c,
+    cc_entered(10)                TYPE c,
+    rpt_cust3                     TYPE c,
+    psid_bus_unit2                TYPE c,
+    rpt_custom5                   TYPE c,
+    rpt_custom6                   TYPE c,
+    rpt_custom7                   TYPE c,
+    emp_email                     TYPE c,
+    proj_client_comments          TYPE c,
+    addtl_comments                TYPE c,
+    rpt_custom11                  TYPE c,
+    rpt_custom12                  TYPE c,
+    rpt_custom13                  TYPE c,
+    rpt_custom14                  TYPE c,
+    charge_type_value             TYPE c,
+    rpt_custom16                  TYPE c,
+    rpt_custom17                  TYPE c,
+    rpt_custom18                  TYPE c,
+    rpt_custom19                  TYPE c,
+    rpt_custom20                  TYPE c,
+    rpt_entry_unique_key(10)      TYPE c,
+    child_reg                     TYPE c,
+    exp_type(70)                  TYPE c,
+    incur_date(10)                TYPE c,
+    exp_curr(5)                   TYPE c,
+    exchg_rate                    TYPE c,
+    exchg_rate_multi_div          TYPE c,
+    personal_exp                  TYPE c,
+    purpose(30)                   TYPE c,
+    vendor(40)                    TYPE c,
+    vendor_name2(40)              TYPE c,
+    review_box_yes_or_no          TYPE c,
+    paper_rece_code               TYPE c,
+    no_of_emp_attendees           TYPE c,
+    no_of_spouse_attendees        TYPE c,
+    no_of_bus_guest_attendees     TYPE c,
+    org_lvl_data                  TYPE c,
+    rpt_entry_org_unit2           TYPE c,
+    rpt_entry_org_unit3           TYPE c,
+    rpt_entry_org_unit4           TYPE c,
+    rpt_entry_org_unit5           TYPE c,
+    rpt_entry_org_unit6           TYPE c,
+    rpt_entry_custom1             TYPE c,
+    rpt_entry_custom2             TYPE c,
+    rpt_entry_custom3             TYPE c,
+    vat_yes_or_no                 TYPE c,
+    vat_amt                       TYPE c,
+    acc_override_comments         TYPE c,
+    rpt_entry_custom7             TYPE c,
+    rpt_entry_custom8             TYPE c,
+    rpt_entry_custom9             TYPE c,
+    ces_std_project               TYPE c,
+    rpt_entry_custom11            TYPE c,
+    ces_std_city                  TYPE c,
+    ces_std_passg_name            TYPE c,
+    ces_std_ticket_num            TYPE c,
+    ces_std_class_of_service      TYPE c,
+    rpt_entry_custom16            TYPE c,
+    rpt_entry_custom17            TYPE c,
+    rpt_entry_custom18            TYPE c,
+    rpt_entry_custom19            TYPE c,
+    rpt_entry_custom20            TYPE c,
+    rpt_entry_custom21            TYPE c,
+    rpt_entry_custom22            TYPE c,
+    rpt_entry_custom23            TYPE c,
+    rpt_entry_custom24            TYPE c,
+    rpt_entry_custom25            TYPE c,
+    rpt_entry_custom26            TYPE c,
+    rpt_entry_custom27            TYPE c,
+    rpt_entry_custom28            TYPE c,
+    rpt_entry_custom29            TYPE c,
+    rpt_entry_custom30            TYPE c,
+    rpt_entry_custom31            TYPE c,
+    rpt_entry_custom32            TYPE c,
+    rpt_entry_custom33            TYPE c,
+    rpt_entry_custom34            TYPE c,
+    rpt_entry_custom35            TYPE c,
+    rpt_entry_custom36            TYPE c,
+    rpt_entry_custom37            TYPE c,
+    rpt_entry_custom38            TYPE c,
+    rpt_entry_custom39            TYPE c,
+    ces_std                       TYPE c,
+*             amt_spent_in_spend_curr(15) TYPE c,
+*             amt_spent_in_reimb_curr(15) TYPE c,
+    spent_curr(15)                TYPE c,
+    reimb_curr(15)                TYPE c,
+
+    amt_apprv_in_reimb_curr       TYPE c,
+    rpt_entry_future_use1         TYPE c,
+    rpt_entry_future_use2         TYPE c,
+    rpt_entry_future_use3         TYPE c,
+    rpt_entry_future_use4         TYPE c,
+    ccard_acc_num                 TYPE c,
+    name_on_ccard                 TYPE c,
+    code_from_source_system       TYPE c,
+    ref_num_ccard                 TYPE c,
+    unique_key_import_trans       TYPE c,
+    ccard_trans_type              TYPE c,
+    ccard_vend_trans_id           TYPE c,
+    amt_of_charge_spend_curr      TYPE c,
+    amt_of_tax_provided_by_vendor TYPE c,
+    curr_code_for_spend_curr      TYPE c,
+    amt_of_charge_in_bill_curr    TYPE c,
+    curr_code_for_billing_curr    TYPE c,
+    date_charge_merchant          TYPE c,
+    date_charge_posted_to_ccard   TYPE c,
+    charge_desc_merchant          TYPE c,
+    merchant_code                 TYPE c,
+    merchant_name                 TYPE c,
+    merchant_city                 TYPE c,
+    merchant_state                TYPE c,
+    merchant_country              TYPE c,
+    merchant_ref_num              TYPE c,
+    trans_bill_type               TYPE c,
+    exchg_rate_for_bill_curr      TYPE c,
+    amt_due_comp_card             TYPE c,
+    ccard_trans_future_use3       TYPE c,
+    ccard_trans_future_use4       TYPE c,
+    ccard_trans_future_use5       TYPE c,
+    ccard_trans_future_use6       TYPE c,
+    spend_loc(4)                  TYPE c, "country
+    spend_sub_loc(10)             TYPE c, " location from
+    spent_frgn_or_home_country    TYPE c,
+    temp11                        TYPE c,
+    temp12                        TYPE c,
+    temp13                        TYPE c,
+    temp14                        TYPE c,
+    temp15                        TYPE c,
+    temp16                        TYPE c,
+    gl_acct(10)                   TYPE c,
+    dr_cr_ind(2)                  TYPE c,
+    amt_to_be_paid(30)            TYPE c, "receipt amt
+    temp17                        TYPE c,
+    miles_business(10)            TYPE c,
+    miles_personal                TYPE c,
+    no_of_passengers              TYPE c,
+    vehicle_id                    TYPE c,
+    car_mileage_future_use1       TYPE c,
+    car_mileage_future_use2       TYPE c,
+    orig_cash_adv_amt             TYPE c,
+    curr_code_alpha               TYPE c,
+    curr_code_numeric             TYPE c,
+    exchg_rate_used               TYPE c,
+    reimb_curr_code_alpha         TYPE c,
+    reimb_curr_code_numeric       TYPE c,
+    date_of_cash_adv_issue        TYPE c,
+    method_of_pay_cash_adv        TYPE c,
+    advance_type                  TYPE c,
+    date_of_cash_adv_req          TYPE c,
+    unique_system_key             TYPE c,
+    cash_adv_future_use2          TYPE c,
+    unique_system_key2            TYPE c,
+    perc_of_rpt_entry(5)          TYPE c, "Defect 6469
+    alloc_custom1                 TYPE c,
+    alloc_custom2                 TYPE c,
+    psid1                         TYPE c,
+    div_charged2(15)              TYPE c,   "CoCode-Controlling area
+    loc_charged2(10)              TYPE c,
+    dept(10)                      TYPE c,  "Costcenter
+    psid_for_cc                   TYPE c,
+    cc_charged(10)                TYPE c,
+    temp18(10)                    TYPE c,
+    psid_for_charge_type          TYPE c,
+    charge_type2(20)              TYPE c,      "billable / project
+    charge_type(12)               TYPE c,
+    alloc_custom(12)              TYPE c,   "Client - billable
+    rest(1)                       TYPE c,
+  END OF t_file_cc2,
+
+
+
+  BEGIN OF t_log,
+    msgtype(1)    TYPE c,
+    reference(20) TYPE c,
+    message(150)  TYPE c,
+  END OF t_log,
+
+  BEGIN OF t_appl,
+"Begin of defect 20503 FCJSJ22 13/01/2023
+"values are truncating because of length issue  and last few fields are missing
+"and hence increasing the fdata length
+*    fdata(1000) TYPE c,
+*    fdata(1200) TYPE c,  increasing length to 1500 characters
+    fdata(1500) TYPE c,
+"End of defect 20503 FCJSJ22 13/01/2023
+  END OF t_appl,
+
+  BEGIN OF ty_csks,
+    kostl TYPE csks-kostl,
+    bukrs TYPE bukrs,
+  END OF ty_csks,
+
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+* Type for cost center and profit center details from cost center master
+  BEGIN OF ty_csks_ofd,
+    kokrs TYPE  kokrs , " Controlling Area
+    kostl TYPE  kostl , " Cost Center
+    datbi TYPE  datbi , " Valid To Date
+    bukrs TYPE  bukrs , " Company Code
+    prctr TYPE  prctr , " Profit Center
+  END OF ty_csks_ofd,
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+  BEGIN OF ty_coas,
+    aufnr(40) TYPE c,
+    bukrs     TYPE bukrs,
+    astkz     TYPE aufstkz,
+  END OF ty_coas,
+
+  BEGIN OF ty_prps,
+    posid(24) TYPE c,
+    pbukr     TYPE ps_pbukr,
+  END OF ty_prps,
+
+  BEGIN OF t_bkpf,
+    bukrs TYPE bukrs,
+    belnr TYPE belnr_d,
+    gjahr TYPE gjahr,
+    blart TYPE blart,
+    bldat TYPE bldat, " 19183 SAKOTA
+    xblnr TYPE xblnr1,
+    stblg TYPE stblg,
+  END OF t_bkpf,
+
+  BEGIN OF t_pa0032,
+    pernr TYPE pa0032-pernr,
+    pnalt TYPE pa0032-pnalt,
+    endda TYPE pa0032-endda, "Defect 3840
+  END OF t_pa0032,
+
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+  BEGIN OF ty_pa0001,
+    pernr TYPE persno,      " Personnel number
+    endda TYPE endda,       " End Date
+    begda TYPE begda,       " Start Date
+    bukrs TYPE bukrs,       " Company Code
+    kostl TYPE kostl,       " Cost Center
+  END OF ty_pa0001.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+*{ BEGING OF LMORALES Defect 9763
+TYPES: BEGIN OF y_vendor,
+         identifier LIKE zggd_gen_xref-identifier,
+         ref1       LIKE zggd_gen_xref-ref1,
+         refkey1    LIKE zggd_gen_xref-refkey1,
+       END OF y_vendor,
+
+       BEGIN OF y_lfb1,
+         lifnr LIKE lfb1-lifnr,
+         akont LIKE lfb1-akont,
+       END OF y_lfb1,
+
+       BEGIN OF y_vendor_record,
+         lifnr          LIKE lfb1-lifnr,
+         reimb_curr1(5) TYPE c,
+         akont          LIKE lfb1-akont,
+       END OF y_vendor_record.
+
+*} END OF LMORALES Defect 9763
+
+*{ BEGING OF LMORALES Defect 10276
+
+TYPES: BEGIN OF y_repid,
+         type(6)        TYPE c,
+         batch_id(3)    TYPE c,
+         batch_date(10) TYPE c,
+         batch_seq(5)   TYPE c,
+         pernr(12)      TYPE c,
+         repid(16)      TYPE c,
+       END OF y_repid.
+*{ END OF LMORALES Defect 10276
+************************************************************************
+*                      WORKING VARIABLES                               *
+************************************************************************
+DATA: v_true               TYPE btch0000-char1,
+      v_file               TYPE string,
+      v_path               TYPE dxlpath,
+      v_abend_flag         TYPE dxxabend,
+      v_offset_amt(15)     TYPE c,
+      v_offset_amt1(15)    TYPE c,
+      v_offset_amt2(15)    TYPE c,
+      v_offset_amt_emp(15) TYPE c,
+      l_count              TYPE posnr_acc,
+      l_count1             TYPE posnr_acc,
+      l_flag               TYPE c,
+      l_text(100)          TYPE c,
+      v_flag1              TYPE c,
+      v_err(1)             TYPE c,
+      l_flg(1)             TYPE c.
+
+DATA: v_tab_raw_data    TYPE truxs_t_text_data,
+      v_filename        TYPE rlgrap-filename,
+      v_posting_flag(1) TYPE c,
+      v_file2(100),
+      v_mode(1)         TYPE c,
+      l_repid(16)       TYPE c,
+      l_exp_curr(5)     TYPE c,
+      l_reimb_curr(5)   TYPE c,
+      v_header          TYPE bapiache09,
+      v_header_emp      TYPE bapiache09,
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+      v_ofd_flag        TYPE c.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+*{ BEGING OF LMORALES Defect 9763
+DATA: v_header_barclays         TYPE bapiache09,
+*      v_flag_barclays            TYPE n,         "LMORALES Defect 10068
+      v_flag_barclays(5)        TYPE n,          "LMORALES Defect 10068
+      v_offset_amt_barclays(15) TYPE c,
+      l_count_barclays          TYPE posnr_acc.
+DATA: wa_currency_barclays   TYPE bapiaccr09,
+      wa_account_gl_barclays TYPE bapiacgl09,
+      wa_extension2_barclays TYPE bapiparex.
+*{ END OF LMORALES Defect 9763
+
+*{ BEGING OF LMORALES Defect 10276
+DATA: v_header_pnc         TYPE bapiache09,
+      v_flag_pnc(5)        TYPE n,          "LMORALES Defect 10068
+      v_offset_amt_pnc(15) TYPE c,
+      l_count_pnc          TYPE posnr_acc.
+DATA: wa_currency_pnc   TYPE bapiaccr09,
+      wa_account_gl_pnc TYPE bapiacgl09,
+      wa_extension2_pnc TYPE bapiparex,
+      wa_repid          TYPE y_repid.
+*{ END OF LMORALES Defect 10276
+
+*{ BEGING OF LMORALES Defect 11420
+DATA: v_header_hdfc         TYPE bapiache09,
+      v_flag_hdfc(5)        TYPE n,
+      v_offset_amt_hdfc(15) TYPE c,
+      l_count_hdfc          TYPE posnr_acc.
+DATA: wa_currency_hdfc   TYPE bapiaccr09,
+      wa_account_gl_hdfc TYPE bapiacgl09,
+      wa_extension2_hdfc TYPE bapiparex.
+*{ END OF LMORALES Defect 11420
+
+*{ BEGING OF RALVARADO-  Defect 12
+DATA: v_header_new         TYPE bapiache09,
+      v_flag_new(5)        TYPE n,
+      v_offset_amt_new(15) TYPE c,
+      l_count_new          TYPE posnr_acc.
+DATA: wa_currency_new   TYPE bapiaccr09,
+      wa_account_gl_new TYPE bapiacgl09,
+      wa_extension2_new TYPE bapiparex.
+*{ END OF RALVARADO-     Defect
+
+************************************************************************
+*                      INTERNAL TABLES                                 *
+************************************************************************
+DATA: i_fieldvalues      TYPE STANDARD TABLE OF dynpread,
+      i_file             TYPE STANDARD TABLE OF t_file,
+      i_file_emp         TYPE STANDARD TABLE OF t_file_emp,
+      i_file_bkpf        TYPE STANDARD TABLE OF t_file,
+      i_file_cc          TYPE STANDARD TABLE OF t_file_cc,
+      wa_file_cc         TYPE t_file_cc,
+      i_file_cc2         TYPE STANDARD TABLE OF t_file_cc2,
+      wa_file_cc2        TYPE t_file_cc2,
+      i_account_gl       TYPE STANDARD TABLE OF bapiacgl09,
+      i_account_gl_emp   TYPE STANDARD TABLE OF bapiacgl09,
+      i_currency         TYPE STANDARD TABLE OF bapiaccr09,
+      i_currency_emp     TYPE STANDARD TABLE OF bapiaccr09,
+      i_return           TYPE STANDARD TABLE OF bapiret2,
+      i_return_emp       TYPE STANDARD TABLE OF bapiret2,
+      i_extension2       TYPE STANDARD TABLE OF bapiparex,
+      i_extension2_emp   TYPE STANDARD TABLE OF bapiparex,
+      i_return_check     TYPE STANDARD TABLE OF bapiret2,
+      i_return_check_emp TYPE STANDARD TABLE OF bapiret2,
+      i_bukrs            TYPE STANDARD TABLE OF zfgl_psid_bukrs,
+      i_log              TYPE STANDARD TABLE OF t_log,
+      i_bkpf             TYPE STANDARD TABLE OF t_bkpf,
+      i_pa0032           TYPE STANDARD TABLE OF t_pa0032,
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+      i_file_card        TYPE STANDARD TABLE OF t_file_cc,        " Table for file data with card payments
+      i_pa0001           TYPE STANDARD TABLE OF ty_pa0001,        " Table for employee HR master data IT0001
+      i_csks_ofd         TYPE STANDARD TABLE OF ty_csks_ofd,      " Table for Cost Center master data
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+      ta_kcde_cells      TYPE  zkcde_cells OCCURS 0 WITH HEADER LINE,
+      i_raw_data         TYPE STANDARD TABLE OF string,
+      i_wbs              TYPE STANDARD TABLE OF ty_wbs.
+
+
+DATA : i_csks       TYPE STANDARD TABLE OF ty_csks,
+       i_coas       TYPE STANDARD TABLE OF ty_coas,
+       i_prps       TYPE STANDARD TABLE OF ty_prps,
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+       wa_file_card TYPE t_file_cc,                 " Work area for file record with card payment
+       wa_pa0001    TYPE ty_pa0001,                 " Work area for Ifotype 0001
+       wa_csks_ofd  TYPE ty_csks_ofd,               " Work area for cost center data
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+       wa_csks      TYPE ty_csks,
+       wa_coas      TYPE ty_coas,
+       wa_wbs       TYPE ty_wbs,
+       wa_prps      TYPE ty_prps,
+       wa_prps1     TYPE ty_prps.
+DATA : flag_emp(2) TYPE n. " Defect 4373
+DATA : flag_emp1 TYPE c. " Defect 4373
+DATA : flag_emp2 TYPE c. " Defect 4373
+
+*{ BEGING OF LMORALES Defect 9763
+
+DATA: i_vendor                TYPE STANDARD TABLE OF y_vendor,
+      i_lfb1                  TYPE STANDARD TABLE OF y_lfb1,
+      i_currency_barclays     TYPE STANDARD TABLE OF bapiaccr09,
+      i_account_gl_barclays   TYPE STANDARD TABLE OF bapiacgl09,
+      i_extension2_barclays   TYPE STANDARD TABLE OF bapiparex,
+      i_return_check_barclays TYPE STANDARD TABLE OF bapiret2,
+      i_vendor_record         TYPE STANDARD TABLE OF y_vendor_record.
+*{ END OF LMORALES Defect 9763
+
+*{ BEGING OF LMORALES Defect 10276
+
+DATA: i_currency_pnc     TYPE STANDARD TABLE OF bapiaccr09,
+      i_account_gl_pnc   TYPE STANDARD TABLE OF bapiacgl09,
+      i_extension2_pnc   TYPE STANDARD TABLE OF bapiparex,
+      i_return_check_pnc TYPE STANDARD TABLE OF bapiret2,
+      i_repid            TYPE STANDARD TABLE OF y_repid.
+
+*{ END OF LMORALES Defect 10276
+
+*{ BEGING OF LMORALES Defect 11420
+
+DATA: i_currency_hdfc     TYPE STANDARD TABLE OF bapiaccr09,
+      i_account_gl_hdfc   TYPE STANDARD TABLE OF bapiacgl09,
+      i_extension2_hdfc   TYPE STANDARD TABLE OF bapiparex,
+      i_return_check_hdfc TYPE STANDARD TABLE OF bapiret2.
+
+*{ END OF LMORALES Defect 11420
+
+*{ BEGING OF RALVARADO-01302018-Defect 12607
+DATA: i_currency_new     TYPE STANDARD TABLE OF bapiaccr09,
+      i_account_gl_new   TYPE STANDARD TABLE OF bapiacgl09,
+      i_extension2_new   TYPE STANDARD TABLE OF bapiparex,
+      i_return_check_new TYPE STANDARD TABLE OF bapiret2.
+*{ END OF RALVARADO-01302018-Defect 12607
+
+
+************************************************************************
+*                      WORK AREAS                                      *
+************************************************************************
+DATA : wa_tabix     TYPE sy-tabix,
+       lv_tabix(4)  TYPE c,
+       lv_tabix1(4) TYPE c,
+       wa_line(10)  TYPE c,
+       wa_line1(10) TYPE c.
+
+DATA: wa_fieldvalues    TYPE dynpread,
+      wa_file           TYPE t_file,
+      wa_file_emp       TYPE t_file_emp,
+      wa_account_gl     TYPE bapiacgl09,
+      wa_account_gl_emp TYPE bapiacgl09,
+      wa_account_gl_tmp TYPE bapiacgl09,
+      wa_currency       TYPE bapiaccr09,
+      wa_extension2     TYPE bapiparex,
+      wa_extension2_emp TYPE bapiparex,
+      wa_currency_tmp   TYPE bapiaccr09,
+      wa_extension2_tmp TYPE bapiparex,
+      wa_five(5)        TYPE c,
+      wa_len(1)         TYPE c,
+      wa_appl           TYPE t_appl,
+      wa_return         TYPE bapiret2,
+      wa_raw_data       TYPE string,
+      wa_return_check   TYPE bapiret2,
+      wa_bukrs          TYPE zfgl_psid_bukrs,
+      wa_log            TYPE t_log,
+      wa_pa0032         TYPE t_pa0032,
+      wa_bkpf           TYPE t_bkpf.
+
+DATA: BEGIN OF i_logfi OCCURS 0,
+        fileintern LIKE filenameci-fileintern,
+        fileextern LIKE filenameci-fileextern,
+        filename   LIKE filetextci-filename,
+      END OF i_logfi.
+
+DATA : lv_profl TYPE profidproj,
+       lv_psphi TYPE ps_psphi.
+DATA: fld_tab LIKE dfies OCCURS 0 WITH HEADER LINE.
+DATA: c_true               TYPE c VALUE 'X'.
+DATA: emr_flag(1), file_name(60).
+DATA : l_logical TYPE filename-fileintern.
+
+
+* Data Declarations for Email
+DATA: lt_mailsubject     TYPE sodocchgi1.
+DATA: lt_mailrecipients  TYPE STANDARD TABLE OF somlrec90 WITH HEADER LINE.
+DATA: lt_mailtxt         TYPE STANDARD TABLE OF soli      WITH HEADER LINE.
+
+
+* Defect 1089
+
+TYPES : BEGIN OF ty_inter,
+          type(6)        TYPE c,
+          batch_id(3)    TYPE c,
+          batch_date(10) TYPE c,
+          batch_seq(5)   TYPE c,
+          pernr(12)      TYPE c,
+          rest(10)       TYPE c,
+        END OF ty_inter.
+
+DATA : t_inter  TYPE STANDARD TABLE OF ty_inter,
+       wa_inter TYPE ty_inter.
+
+DATA : i_data_rec TYPE STANDARD TABLE OF solisti1,
+       wa_data    TYPE solisti1.
+
+DATA: v_flag TYPE string. "Dkannan - Defect 7212 -  Concur clearingaccount
+
+*{ BEGING OF LMORALES Defect 9763
+************************************************************************
+*                      CONSTANTS                                       *
+************************************************************************
+
+CONSTANTS: c_c TYPE char1 VALUE 'C',
+           c_e TYPE char1 VALUE 'E',
+           c_k TYPE char1 VALUE 'K',
+           c_x TYPE char1 VALUE 'X',
+           c_s TYPE char1 VALUE 'S'.
+
+*{ END OF LMORALES Defect 9763
+
+*{Begin of CSURYAWANSHI-09142020 : Defect 15373
+TYPES : BEGIN OF t_skb1,
+          bukrs TYPE  bukrs                          , " Company Code
+          saknr TYPE  saknr                          , " G/L Account Number
+        END OF t_skb1,
+
+        BEGIN OF t_ska1,
+          ktopl TYPE  ktopl , " Chart of Accounts
+          saknr TYPE  saknr , " G/L Account Number
+          xbilk TYPE  xbilk , " Indicator: Account Is a Balance Sheet Account?
+          sakan TYPE  sakan , " G/L account number, significant length
+          gvtyp TYPE  gvtyp , " P&L Statement Account Type
+          xloev TYPE  xloev , " Indicator: Account marked for deletion?
+        END OF t_ska1,
+
+        BEGIN OF t_org_keys,
+          pernr TYPE  persno  , " Personnel number
+          subty TYPE  subty , " Subtype
+          objps TYPE  objps , " Object Identification
+          sprps TYPE  sprps , " Lock Indicator for HR Master Data Record
+          endda TYPE  endda , " End Date
+          begda TYPE  begda , " Start Date
+          seqnr TYPE  seqnr , " Number of Infotype Record with Same Key
+          vdsk1 TYPE  vdsk1 , " Organizational Key
+        END OF t_org_keys,
+
+        BEGIN OF t_cross_ref,
+          identifier TYPE  zzidentifier                   , " Xreference Identifier
+          refkey1    TYPE  zzrefkeyfield                  , " Cross reference Key
+          refkey2    TYPE  zzrefkeyfield                  , " Cross reference Key
+          ref1       TYPE  zzreffield                     , " Cross Reference Field
+        END OF t_cross_ref.
+
+CONSTANTS : c_identif_bs   TYPE  zzidentifier   VALUE 'CORP_BS',
+            c_identif_pl   TYPE  zzidentifier   VALUE 'CORP_PL',
+*            c_ind_compcode TYPE  bukrs          VALUE '2130', changes by rirawat defect 18887
+             c_ind_compcode TYPE  bukrs          VALUE '2101',  " added by rirawat defect 18887
+            c_ktopl        TYPE  ktopl          VALUE '1000',
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+            c_row          TYPE  kcd_ex_row_n   VALUE '0002',
+            c_col          TYPE  kcd_ex_col_n   VALUE '0021',
+            c_ofd          TYPE  zkcd_text      VALUE 'ORACLE'.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+*Start of Defect-1483 F463AFJ 06/12/2023
+  CONSTANTS: c_identifier1 TYPE ZZIDENTIFIER      VALUE 'TP_OFD',
+             c_refkey1     TYPE ZZREFKEYFIELD     VALUE 'ORACLE'.
+*End of Defect-1483 F463AFJ 06/12/2023
+
+DATA : it_ind_bspl TYPE STANDARD TABLE OF t_cross_ref,
+       i_skb1      TYPE STANDARD TABLE OF t_skb1,
+       i_ska1      TYPE STANDARD TABLE OF t_ska1,
+       i_org_keys  TYPE STANDARD TABLE OF t_org_keys,
+       wa_skb1     TYPE t_skb1,
+       wa_ska1     TYPE t_ska1,
+       wa_org_keys TYPE t_org_keys,
+       v_india_flg TYPE c.
+
+FIELD-SYMBOLS : <fs_ind_bspl>   TYPE t_cross_ref,
+                <fs_ska1>       TYPE t_ska1,
+                <fs_ind_bs>     TYPE t_cross_ref,
+                <fs_ind_pl>     TYPE t_cross_ref,
+                <fs_ska1_new>   TYPE t_ska1,
+                <fs_ind_bs_new> TYPE t_cross_ref,
+                <fs_ind_pl_new> TYPE t_cross_ref,
+                <fs_ska1_emp>   TYPE t_ska1,
+                <fs_ind_bs_emp> TYPE t_cross_ref,
+                <fs_ind_pl_emp> TYPE t_cross_ref.
+*{End of CSURYAWANSHI-09142020 : Defect 15373
+* Begin of Changes SAKOTA I118 DS4K901193
+TYPES:
+  BEGIN OF t_header,
+    type                          TYPE string,
+    batch_id                      TYPE string,
+    batch_date                    TYPE string,
+    batch_seq                     TYPE string,
+    pernr                         TYPE string,
+    lname                         TYPE string,
+    fname                         TYPE string,
+    m_init                        TYPE string,
+    emp_grp                       TYPE string,
+    org_unit                      TYPE string,
+    org_unit2                     TYPE string,
+    psid                          TYPE string,
+    emp_div                       TYPE string,
+    emp_loc                       TYPE string,
+    emp_dept                      TYPE string,
+    temp1                         TYPE string,
+    temp2                         TYPE string,
+    temp3                         TYPE string,
+    repid_32                      TYPE string,
+    repid                         TYPE string,
+    ext_acc_id                    TYPE string,
+    reimb_curr1                   TYPE string,
+    emp_home_cntry                TYPE string,
+    appr_date                     TYPE string,
+    user_custom_date              TYPE string,
+    approal_date                  TYPE string,
+    report                        TYPE string,
+    temp4                         TYPE string,
+    temp5                         TYPE string,
+    temp6                         TYPE string,
+    posted_amt                    TYPE string,
+    apprv_amt                     TYPE string,
+    temp7                         TYPE string,
+    temp8                         TYPE string,
+    temp9                         TYPE string,
+    temp10                        TYPE string,
+    emp_psid2                     TYPE string,
+    div_charged                   TYPE string,
+    loc_charged                   TYPE string,
+    dept_charged                  TYPE string,
+    psid_bus_unit                 TYPE string,
+    cc_entered                    TYPE string,
+    rpt_cust3                     TYPE string,
+    psid_bus_unit2                TYPE string,
+    rpt_custom5                   TYPE string,
+    rpt_custom6                   TYPE string,
+    rpt_custom7                   TYPE string,
+    emp_email                     TYPE string,
+    proj_client_comments          TYPE string,
+    addtl_comments                TYPE string,
+*             rpt_custom11 TYPE string,         "LMORALES Defect 10068
+    rpt_custom11                  TYPE string,       "LMORALES Defect 10068
+    rpt_custom12                  TYPE string,
+    rpt_custom13                  TYPE string,
+    rpt_custom14                  TYPE string,
+    charge_type_value             TYPE string,
+    rpt_custom16                  TYPE string,
+    rpt_custom17                  TYPE string,
+    rpt_custom18                  TYPE string,
+    rpt_custom19                  TYPE string,
+*    rpt_custom20                  TYPE string, "LMORALES Defect 10781
+    rpt_custom20                  TYPE string, "LMORALES Defect 10781
+    rpt_entry_unique_key          TYPE string,
+    child_reg                     TYPE string,
+    exp_type                      TYPE string,
+    incur_date                    TYPE string,
+    exp_curr                      TYPE string,
+    exchg_rate                    TYPE string,
+    exchg_rate_multi_div          TYPE string,
+    personal_exp                  TYPE string,
+    purpose                       TYPE string,
+    vendor                        TYPE string,
+    vendor_name2                  TYPE string,
+    review_box_yes_or_no          TYPE string,
+    paper_rece_code               TYPE string,
+    no_of_emp_attendees           TYPE string,
+    no_of_spouse_attendees        TYPE string,
+    no_of_bus_guest_attendees     TYPE string,
+    org_lvl_data                  TYPE string,
+    rpt_entry_org_unit2           TYPE string,
+    rpt_entry_org_unit3           TYPE string,
+    rpt_entry_org_unit4           TYPE string,
+    rpt_entry_org_unit5           TYPE string,
+    rpt_entry_org_unit6           TYPE string,
+    rpt_entry_custom1             TYPE string,
+    rpt_entry_custom2             TYPE string,
+    rpt_entry_custom3             TYPE string,
+    vat_yes_or_no                 TYPE string,
+    vat_amt                       TYPE string,
+    acc_override_comments         TYPE string,
+    rpt_entry_custom7             TYPE string,
+    rpt_entry_custom8             TYPE string,
+    rpt_entry_custom9             TYPE string,
+    ces_std_project               TYPE string,
+    rpt_entry_custom11            TYPE string,
+    ces_std_city                  TYPE string,
+    ces_std_passg_name            TYPE string,
+    ces_std_ticket_num            TYPE string,
+    ces_std_class_of_service      TYPE string,
+    rpt_entry_custom16            TYPE string,
+    rpt_entry_custom17            TYPE string,
+    rpt_entry_custom18            TYPE string,
+    rpt_entry_custom19            TYPE string,
+    rpt_entry_custom20            TYPE string,
+    rpt_entry_custom21            TYPE string,
+    rpt_entry_custom22            TYPE string,
+    rpt_entry_custom23            TYPE string,
+    rpt_entry_custom24            TYPE string,
+    rpt_entry_custom25            TYPE string,
+    rpt_entry_custom26            TYPE string,
+    rpt_entry_custom27            TYPE string,
+    rpt_entry_custom28            TYPE string,
+    rpt_entry_custom29            TYPE string,
+    rpt_entry_custom30            TYPE string,
+    rpt_entry_custom31            TYPE string,
+    rpt_entry_custom32            TYPE string,
+    rpt_entry_custom33            TYPE string,
+    rpt_entry_custom34            TYPE string,
+    rpt_entry_custom35            TYPE string,
+    rpt_entry_custom36            TYPE string,
+    rpt_entry_custom37            TYPE string,
+    rpt_entry_custom38            TYPE string,
+    rpt_entry_custom39            TYPE string,
+    ces_std                       TYPE string,
+*             amt_spent_in_spend_curr(15) TYPE string,
+*             amt_spent_in_reimb_curr(15) TYPE string,
+    spent_curr                    TYPE string,
+    reimb_curr                    TYPE string,
+
+    amt_apprv_in_reimb_curr       TYPE string,
+    rpt_entry_future_use1         TYPE string,
+    rpt_entry_future_use2         TYPE string,
+    rpt_entry_future_use3         TYPE string,
+    rpt_entry_future_use4         TYPE string,
+    ccard_acc_num                 TYPE string,
+    name_on_ccard                 TYPE string,
+    code_from_source_system       TYPE string,
+    ref_num_ccard                 TYPE string,
+    unique_key_import_trans       TYPE string,
+    ccard_trans_type              TYPE string,
+    ccard_vend_trans_id           TYPE string,
+    amt_of_charge_spend_curr      TYPE string,
+    amt_of_tax_provided_by_vendor TYPE string,
+    curr_code_for_spend_curr      TYPE string,
+    amt_of_charge_in_bill_curr    TYPE string,
+    curr_code_for_billing_curr    TYPE string,
+    date_charge_merchant          TYPE string,
+    date_charge_posted_to_ccard   TYPE string,
+    charge_desc_merchant          TYPE string,
+    merchant_code                 TYPE string,
+    merchant_name                 TYPE string,
+    merchant_city                 TYPE string,
+    merchant_state                TYPE string,
+    merchant_country              TYPE string,
+    merchant_ref_num              TYPE string,
+    trans_bill_type               TYPE string,
+    exchg_rate_for_bill_curr      TYPE string,
+    amt_due_comp_card             TYPE string,
+    ccard_trans_future_use3       TYPE string,
+    ccard_trans_future_use4       TYPE string,
+    ccard_trans_future_use5       TYPE string,
+    ccard_trans_future_use6       TYPE string,
+    spend_loc                     TYPE string, "country
+    spend_sub_loc                 TYPE string, " location from
+    spent_frgn_or_home_country    TYPE string,
+    temp11                        TYPE string,
+    temp12                        TYPE string,
+*             temp13(8) TYPE string,  "LMORALES Defect 9763
+    temp13                        TYPE string,  "LMORALES Defect 9763
+    temp14                        TYPE string,
+*             temp15(10) TYPE string, "LMORALES Defect 9763
+    temp15                        TYPE string,  "LMORALES Defect 9763
+    temp16                        TYPE string,
+    gl_acct                       TYPE string,
+    dr_cr_ind                     TYPE string,
+    amt_to_be_paid                TYPE string, "receipt amt
+    temp17                        TYPE string,
+    miles_business                TYPE string,
+    miles_personal                TYPE string,
+    no_of_passengers              TYPE string,
+    vehicle_id                    TYPE string,
+    car_mileage_future_use1       TYPE string,
+    car_mileage_future_use2       TYPE string,
+    orig_cash_adv_amt             TYPE string,
+    curr_code_alpha               TYPE string,
+    curr_code_numeric             TYPE string,
+    exchg_rate_used               TYPE string,
+    reimb_curr_code_alpha         TYPE string,
+    reimb_curr_code_numeric       TYPE string,
+    date_of_cash_adv_issue        TYPE string,
+    method_of_pay_cash_adv        TYPE string,
+    advance_type                  TYPE string,
+    date_of_cash_adv_req          TYPE string,
+    unique_system_key             TYPE string,
+    cash_adv_future_use2          TYPE string,
+    unique_system_key2            TYPE string,
+    perc_of_rpt_entry             TYPE string, "Defect 2612 Defect 6469
+    alloc_custom1                 TYPE string,
+    alloc_custom2                 TYPE string,
+    psid1                         TYPE string,
+    div_charged2                  TYPE string,   "CoCode-Controlling area
+    loc_charged2                  TYPE string,
+    dept                          TYPE string,  "Costcenter
+    psid_for_cc                   TYPE string,
+    cc_charged                    TYPE string,
+    temp18                        TYPE string,
+    psid_for_charge_type          TYPE string,
+    charge_type2                  TYPE string,      "billable / project
+    charge_type                   TYPE string,
+    alloc_custom                  TYPE string,   "Client - billable
+    rest                          TYPE string,
+  END OF t_header.
+
+  TYPES:
+  BEGIN OF t_bkpf_new,
+    repid(16),
+    budat TYPE budat,
+ END OF t_bkpf_new.
+DATA i_bkpf_new        TYPE STANDARD TABLE OF t_bkpf_new.
+DATA: ok_code     LIKE sy-ucomm,
+      g_container TYPE scrfname VALUE 'G_CONTAINER'.
+DATA:
+  i_fcat        TYPE  lvc_t_fcat,
+  wa_obj_stdesc TYPE REF TO cl_abap_structdescr,
+  wa_fldcat     TYPE LINE OF lvc_t_fcat.
+DATA: wa_grid1           TYPE REF TO cl_gui_alv_grid,
+      g_custom_container TYPE REF TO cl_gui_custom_container.
+
+TYPES : BEGIN OF t_logref,
+          repid(16),
+        END OF t_logref.
+DATA : i_logref    TYPE STANDARD TABLE OF t_logref,
+       wa_logref   TYPE t_logref,
+       i_header    TYPE STANDARD TABLE OF t_header,
+       wa_header   TYPE t_header,
+       i_errorfile TYPE STANDARD TABLE OF t_file.
+DATA send_request   TYPE REF TO cl_bcs.
+DATA document       TYPE REF TO cl_document_bcs.
+DATA recipient      TYPE REF TO if_recipient_bcs.
+DATA bcs_exception  TYPE REF TO cx_bcs.
+
+DATA main_text      TYPE bcsy_text.
+DATA size           TYPE so_obj_len.
+DATA binary_content TYPE solix_tab.
+DATA sent_to_all    TYPE os_boolean.
+DATA lv_string TYPE string.
+* Endof Changes SAKOTA I118 DS4K901193
+
+*Constants for STVARV
+CONSTANTS: C_INDIA_CC TYPE CHAR30 VALUE 'ZPTP_WEERCA_CC_IN'.
+
+*Ranges for STVARV
+DATA: R_INDIA_CC TYPE STANDARD TABLE OF SELOPT WITH HEADER LINE.
+
+  DATA: lv_csubrc LIKE sy-subrc.
+      DATA: lv_esubrc LIKE sy-subrc.
+      DATA: e_repid LIKE l_repid.
+      DATA: c_repid LIKE l_repid.
