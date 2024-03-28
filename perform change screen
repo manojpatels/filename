@@ -1,0 +1,107 @@
+FORM change_screen_fields .
+  SELECT SINGLE ref1 ref2 FROM zggd_gen_xref INTO (p_gl_off , p_cc_off) WHERE identifier = 'ERCCA_W' AND refkey1 = 'GL_ACC' AND active = 'X'.
+
+  LOOP AT SCREEN.
+    IF p_pres = 'X' AND screen-group1 = 'M1'.
+      screen-input  = '0'.
+      screen-invisible  = '1'.
+      IF p_file IS INITIAL. " OR p_file = 'Z_RTR_IN_ERCCA_WEEKLY'.   "RALVARADO-12092021 - NO BODS process in future.
+        p_file = 'C:\'.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+
+    IF p_appl = 'X' AND screen-group1 = 'M1'.
+      screen-input  = '1'.
+* Begin of Change by CSURYAWANSHI on 07/08/2020 : Defect 15271
+* Assigning default Logical file path for OFD interface as Logical file path is not used in OFS scenario and file posting
+* in OFS does not happen through batch job processing but through the BOT who execute transaction using file from presentation server
+* Begin of uncomment/comment SAKOTA I118 DS4K901193
+*       p_file = 'Z_RTR_IN_ERCCA_WEEKLY'. "F9ROQZ9              "RALVARADO-12092021 - NO BODS process in future.
+*      p_file = 'Z_RTR_IN_CONCUR_OFD_WEEKLY'.
+* End of uncomment/comment SAKOTA I118 DS4K901193
+* End of Change by CSURYAWANSHI on 07/08/2020 : Defect 15271
+      MODIFY SCREEN.
+    ENDIF.
+
+
+*    IF p_int = 'X' AND screen-group1 = 'M2'.
+*      screen-input  = '0'.
+*      CLEAR p_cc_off.
+*      screen-invisible = 1.
+*      MODIFY SCREEN.
+*    ENDIF.
+
+*    IF p_dom = 'X' AND screen-group1 = 'M2'.
+*      screen-input  = '0'.
+*      MODIFY SCREEN.
+*    ENDIF.
+
+  ENDLOOP.
+
+  LOOP AT SCREEN.
+    IF screen-name = 'P_GL_OFF' OR screen-name = 'P_CC_OFF'.
+      screen-input  = '0'.
+      MODIFY SCREEN.
+    ENDIF.
+* Begin of comments SAKOTA I118 DS4K901193
+** Begin of change by CSURYAWANSHI on 07/08/2020 : Defect 15271
+** Modified temporarily and restored later to create variant Concur_OFD for batch job processing of concur files
+*    IF screen-name = 'P_APPL' OR  screen-name = 'P_CC_OFF'.
+**    IF screen-name = 'P_CC_OFF'.
+** End of change by CSURYAWANSHI on 07/08/2020 : Defect 15271
+*      screen-input  = '0'.
+*      MODIFY SCREEN.
+*    ENDIF.
+*End of Comments SAKOTA I118 DS4K901193
+  ENDLOOP.
+
+ENDFORM.                    " CHANGE_SCREEN_FIELDS
+*&---------------------------------------------------------------------*
+*&      Form  SEND_MAIL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM send_mail .
+
+* Recipients
+  lt_mailrecipients-rec_type  = 'U'.
+  lt_mailrecipients-receiver = '#####@###.###'.
+  APPEND lt_mailrecipients .
+  CLEAR lt_mailrecipients .
+
+* Subject.
+  lt_mailsubject-obj_name = 'TEST'.
+  lt_mailsubject-obj_langu = sy-langu.
+  lt_mailsubject-obj_descr = 'ERCCA Weekly Interface Execution Log.'(026).
+
+* Mail Contents
+  lt_mailtxt = 'WEEKLY TRAVEL CART'(027).
+  APPEND lt_mailtxt. CLEAR lt_mailtxt.
+
+* Send Mail
+  CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
+    EXPORTING
+      document_data              = lt_mailsubject
+    TABLES
+      object_content             = lt_mailtxt
+      receivers                  = lt_mailrecipients
+    EXCEPTIONS
+      too_many_receivers         = 1
+      document_not_sent          = 2
+      document_type_not_exist    = 3
+      operation_no_authorization = 4
+      parameter_error            = 5
+      x_error                    = 6
+      enqueue_error              = 7
+      OTHERS                     = 8.
+  IF sy-subrc EQ 0.
+    COMMIT WORK.
+
+*   Push mail out from SAP outbox
+    SUBMIT rsconn01 WITH mode = 'INT' AND RETURN.
+
+  ENDIF.
