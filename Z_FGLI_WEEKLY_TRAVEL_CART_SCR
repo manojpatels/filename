@@ -1,0 +1,42 @@
+*&---------------------------------------------------------------------*
+*&  Include           Z_FGLI_WEEKLY_TRAVEL_CART_SCR
+*&---------------------------------------------------------------------*
+
+************************************************************************
+*                  SELECTION SCREEN                                    *
+************************************************************************
+SELECTION-SCREEN BEGIN OF BLOCK doctype WITH FRAME TITLE text-002.
+SELECTION-SCREEN SKIP.
+PARAMETERS : p_doctyp    type BKPF-BLART obligatory default 'ZM',        " Doc Type
+             pdoctyp1    type BKPF-BLART obligatory default 'ZN',
+             p_posdat    type BKPF-BUDAT obligatory DEFAULT SY-DATUM,    " Posting Date
+             p_gl_per    type BSEG-SAKNR obligatory DEFAULT '120000',        " GL Account for Personal Expense
+             p_gl_bil    type BSEG-SAKNR obligatory DEFAULT '520500'.        " GL Account for Billable Expense
+*             p_gl_nb    type BSEG-SAKNR obligatory.        " GL Account for Non Bill Expense
+
+SELECTION-SCREEN END OF BLOCK doctype .
+*SELECTION-SCREEN BEGIN OF BLOCK file WITH FRAME TITLE text-028.
+*SELECTION-SCREEN SKIP.
+*parameters : p_dom   RADIOBUTTON  GROUP g1 USER-COMMAND ucomm default 'X' ,        " Domestic
+*             p_int   RADIOBUTTON  group g1  .                " International.
+*SELECTION-SCREEN END OF BLOCK file.
+
+SELECTION-SCREEN BEGIN OF BLOCK offset WITH FRAME TITLE text-003.
+SELECTION-SCREEN SKIP.
+parameters : p_gl_off   type BSEG-SAKNR  obligatory ,        " GL Account for Offset
+             p_cc_off   type bukrs obligatory .              " Company Code for Offset
+SELECTION-SCREEN END OF BLOCK offset .
+
+SELECTION-SCREEN BEGIN OF BLOCK promode WITH FRAME TITLE text-001.
+SELECTION-SCREEN SKIP.
+PARAMETERS : p_pres  RADIOBUTTON GROUP mode USER-COMMAND ucomm default 'X',   " Presentation Server / Desktop
+             p_appl  RADIOBUTTON group mode ,   " Application Server
+             p_file(120) LOWER CASE OBLIGATORY  default 'C:\', " Logical Path
+             p_fname LIKE rlgrap-filename LOWER CASE MODIF ID M1,
+* Begin of Changes SAKOTA I118 DS4K901193
+             P_email TYPE ad_smtpadr MODIF ID M1.
+* End of Changes SAKOTA I118 DS4K901193
+SELECTION-SCREEN SKIP .
+PARAMETERS: p_test AS CHECKBOX default 'X'.
+
+SELECTION-SCREEN END OF BLOCK promode .
