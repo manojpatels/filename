@@ -1,0 +1,218 @@
+PERFORM read_file_from_pres.
+  ENDIF.
+  CLEAR : v_err.
+* Do the Account Postings
+  IF i_file[] IS NOT INITIAL.
+    DELETE i_file WHERE repid IS INITIAL.
+*  delete i_file index 1. " Column Headings.
+    PERFORM fetch_wbs_suffix.      " WBS Suffix
+    SORT i_file BY repid exp_curr.
+    DATA : lv_repid(32).
+
+    FREE i_repid. " lmorales defect 10276
+
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+* Charge Type and Chrge type values not expected in OFD interface
+    IF v_ofd_flag = c_x.
+      LOOP AT i_file ASSIGNING FIELD-SYMBOL(<fs_file>).
+* Clear charge type and its value
+        CLEAR : <fs_file>-charge_type,
+                <fs_file>-charge_type2.
+      ENDLOOP.
+    ENDIF.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+    LOOP AT i_file INTO wa_file.
+
+*{ BEGING OF LMORALES Defect 10276
+
+      CLEAR wa_repid.
+
+      MOVE-CORRESPONDING wa_file TO wa_repid.
+
+      APPEND wa_repid TO i_repid.
+
+*{ END OF LMORALES Defect 10276
+*Start of change - defect 2880
+      lv_tabix = sy-tabix.
+      CLEAR lv_repid.
+      MOVE wa_file-repid TO lv_repid.
+*{Begin of RALVARADO-08202018 Defect 13289
+*      IF NOT wa_file-psid IS INITIAL.
+*{Begin of RALVARADO-02212019 Defect 13873 - Previous commented code
+*Start of defect - 1754 - F463AFJ - 09/20/2023
+*      IF wa_file-charge_type2 = 'BILLABLE NON-WBS'(012) OR wa_file-charge_type2 = 'WBS BILLABLE'(010)
+*              OR wa_file-charge_type2 = 'BILLABLE'.
+      IF wa_file-charge_type2 = 'BILLABLE NON-WBS'(012) OR wa_file-charge_type2 = 'WBS BILLABLE'(010).
+*End of defect - 1754 - F463AFJ - 09/20/2023
+*          CONCATENATE wa_file-repid wa_file-exp_curr wa_file-psid INTO wa_file-repid SEPARATED BY '/'.  " Reference
+        CONCATENATE wa_file-repid wa_file-exp_curr INTO wa_file-repid SEPARATED BY '/'.  " Reference
+      ELSE.
+*}End of RALVARADO-02212019 Defect 13873
+*          CONCATENATE wa_file-repid wa_file-reimb_curr1 wa_file-psid INTO wa_file-repid SEPARATED BY '/'.  " Reference
+        CONCATENATE wa_file-repid wa_file-reimb_curr1 INTO wa_file-repid SEPARATED BY '/'.  " Reference
+      ENDIF.             "RALVARADO-02212019
+*      ELSE.
+*        wa_log-msgtype        = 'E'.
+*        wa_log-reference      = wa_file-repid.
+*        CONCATENATE 'PSID is missing in row' lv_tabix INTO  wa_log-message RESPECTING BLANKS.
+*        APPEND wa_log TO i_log.
+*        CLEAR wa_log.
+*        v_posting_flag = 'X'.
+*      ENDIF.
+*}End of RALVARADO-08202018 Defect 13289
+*Emd of change - defect 2880
+
+      CONDENSE wa_file-repid.
+      CLEAR wa_inter.
+      READ TABLE t_inter INTO wa_inter WITH KEY batch_seq = wa_file-batch_seq.
+      IF sy-subrc = 0.
+        REPLACE ALL OCCURRENCES OF '"' IN wa_inter-pernr WITH ' '.
+        CONDENSE wa_inter-pernr.
+        wa_file-pernr = wa_inter-pernr.
+
+        wa_len = strlen( wa_file-pernr ).
+        IF wa_len < 5.
+          CLEAR wa_five.
+          wa_five = wa_file-pernr.
+          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+            EXPORTING
+              input        = wa_five
+            IMPORTING
+              output       = wa_five
+            EXCEPTIONS
+              length_error = 1
+              OTHERS       = 2.
+          wa_file-pernr = wa_five.
+        ENDIF.
+
+      ENDIF.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input        = wa_file-dept
+        IMPORTING
+          output       = wa_file-dept
+        EXCEPTIONS
+          length_error = 1
+          OTHERS       = 2.
+
+      IF wa_file-charge_type2 = 'INTERNAL ORDER'(009).
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input     = wa_file-charge_type
+          IMPORTING
+            output    = wa_file-charge_type
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+        wa_file-charge_type = wa_file-charge_type+28(12).
+        IF sy-subrc <> 0.
+
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+        ENDIF.
+      ENDIF.
+
+*      IF wa_file-charge_type2 = 'WBS BILLABLE'(010) OR wa_file-charge_type2 = 'WBS NON-BILLABLE'.
+*        CLEAR wa_wbs.
+*        READ TABLE i_wbs INTO wa_wbs WITH KEY exp_type =  wa_file-exp_type.
+*        IF sy-subrc = 0.
+*          REPLACE ALL OCCURRENCES OF '.' IN wa_file-charge_type WITH ' ' .
+*          CONDENSE wa_file-charge_type.
+*          CONCATENATE wa_file-charge_type wa_wbs-suffix INTO wa_file-charge_type .
+*          condense wa_file-charge_type.
+*        ENDIF.
+*      ENDIF.
+
+*Start of change - Defect 5272
+      IF wa_file-dept IS INITIAL.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input        = wa_file-temp18
+          IMPORTING
+            output       = wa_file-temp18
+          EXCEPTIONS
+            length_error = 1
+            OTHERS       = 2.
+        wa_file-dept = wa_file-temp18.
+      ENDIF.
+*End of change - Defect 5272
+
+      MODIFY i_file FROM wa_file TRANSPORTING pernr repid charge_type alloc_custom dept .
+
+      IF wa_file-temp15 EQ 'EMPLOYEE'.
+        MOVE-CORRESPONDING wa_file TO wa_file_emp.
+        CLEAR wa_file_emp-repid.
+        CONCATENATE 'E' lv_repid INTO wa_file_emp-repid.
+*        CONCATENATE wa_file_emp-repid wa_file-reimb_curr1 wa_file-psid INTO wa_file_emp-repid SEPARATED BY '/'.
+        CONCATENATE wa_file_emp-repid wa_file-reimb_curr1 INTO wa_file_emp-repid SEPARATED BY '/'.    "RALVARADO-08202018 Defect 13289
+        APPEND wa_file_emp TO i_file_emp.
+      ENDIF.
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+* Prepare temporary table of Card Payment report IDs to check if actual postings exists already with report IDs.*
+      IF v_ofd_flag = c_x AND wa_file-temp15 <> 'EMPLOYEE'.
+        MOVE-CORRESPONDING wa_file TO wa_file_card.
+
+        CLEAR wa_file_card-repid.
+* Prepare report ID by prefixing it with C and Reimbursement currentcy.
+        CONCATENATE 'C' lv_repid INTO wa_file_card-repid.
+        CONCATENATE wa_file_card-repid wa_file-reimb_curr1 INTO wa_file_card-repid SEPARATED BY '/'.
+* Populate temp. table with report IDs containing card payments.
+        APPEND wa_file_card TO i_file_card.
+        CLEAR : wa_file_card.
+      ENDIF.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+    ENDLOOP.
+
+
+*    PERFORM fetch_psid_bukrs.      " PSID - BUKRS Mapping from Z Table.   "RALVARADO-08202018 Defect 13289
+    PERFORM fetch_bkpf.            " BKPF fetched for validation
+    PERFORM fetch_pernr.           " PERNR
+    PERFORM check_postings.        " Check if the records are already posted.
+    PERFORM fetch_company_codes.   " Company codes of Cost Centres, WBS and IO fetched.
+
+*{ BEGING OF LMORALES Defect 10068
+*    PERFORM f_fetch_vendor.          "LMORALES Defect 9763
+*{ END OF LMORALES Defect 10068
+
+* start of defect rirawat 12/14/2021
+   " IF v_posting_flag NE 'X'.      " If any of the file document is already posted, this flag is set.
+
+*      v_mode = 'X'.    " Test First
+*      PERFORM call_posting_bapi USING v_mode.    " BAPI Preparation.
+*  end of defect rirawat 12/14/2021
+
+      IF p_test NE 'X'. " if testrun is not checked,
+** Check for Error.
+        "start of defect 17587 rirawat
+*        CLEAR wa_log.
+*        READ TABLE i_log INTO wa_log WITH KEY msgtype  = 'E'.
+*        IF sy-subrc NE 0.
+        "end of defect 17587 rirawat
+          v_mode = ' '.
+       "   REFRESH : i_log , i_return_check,i_return_check_emp."Defect 3998
+          PERFORM call_posting_bapi USING v_mode.    " BAPI Preparation.
+         " start of defect 17587 rirawat
+*        ENDIF.
+
+        ELSE.  "if in test run,v_mode = 'X'
+           v_mode = 'X'.    " Test First
+           PERFORM call_posting_bapi USING v_mode.    " BAPI Preparation.
+
+         "end of defect 17587 rirawat
+      ENDIF.
+
+*     endif.
+* start of defect rirawat 12/14/2021
+  "  ENDIF.
+* end of defect rirawat 12/14/2021
+
+    IF i_log[] IS NOT INITIAL.
+      SORT i_log BY msgtype reference message.
+      DELETE ADJACENT DUPLICATES FROM i_log COMPARING msgtype reference message.
+      PERFORM display_log.         " Error and Success Log Display.
+
+*      perform send_mail.
+    ENDIF.
+  ENDIF.
