@@ -1,0 +1,24 @@
+FORM read_file_from_appl .
+
+* Begin of Change by CSURYAWANSHI on 07/08/2020 : Defect 15271
+*  v_file2 = p_file.
+* File name is concatenation of Physical file path and file name at selection screen
+  CONCATENATE file_name p_fname INTO v_file2.
+* End of Change by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+  OPEN DATASET v_file2 FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+  IF sy-subrc NE 0.
+    WRITE:/ 'Error Opening dataset'.
+    EXIT.
+  ENDIF.
+
+  DO.
+    READ DATASET v_file2 INTO wa_appl.
+    IF sy-subrc <> 0.
+      EXIT.
+    ENDIF.
+
+    PERFORM split_record USING wa_appl.
+  ENDDO.
+  DELETE i_file INDEX 1.
+ENDFORM. 
