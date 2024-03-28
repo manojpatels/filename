@@ -1,0 +1,56 @@
+                                                   Weekly Travel Cart from ERCCA to SAP
+
+ Program ID: Z_FGLI_WEEKLY_TRAVEL_CART
+ Transaction Code:  Z_FGL_WERCCA
+
+Scenari01:
+ WBS Suffix Replacement and updating different processing for Internationals and Domestic File.
+Where the file is posting
+How can we track this file?
+Where the file is going to store in our sap system’
+If posting gets failed, where can we track the file
+Scenari02:
+Z_FGL_WERCCA not loading proper amount (column)from extract when expense item is allocated (split).
+
+Scenari03:
+Concur International Payments, Not Summarizing.
+Scenari04:
+1.	 Def 4946: Associate Out-of-Pocket Expenses.
+2.	 Def 5272: Concur file changes.
+3.	 Def 6059 : Concur change, per diem gap 
+4.	 Def 7212 : Concur clearing account
+5.	 Def 9763 : Corp Card processing Concur expense  report interface Concur expense report interface changes
+6.	 Def 10276 : (2016) NA Corp Card Replace - Concur program update Concur program should create Card vendor and employee vendor invoices for US and Canada
+7.	Def 10781 : NA Corp Card - Concur update to accommodate associates with foreign cost center
+8.	Def 10276 : (2015) NA Corp Card Replace - Concur program update Concur program should create Card vendor and employee vendor invoices for US and Canada
+9.	Def 10276: NA Corp Card Replace - Concur program update Concur program should create Card vendor and employee vendor invoices for US and Canada
+10.	Def 11420: Concur program update to accommodate new Corp card vendor for India (HDFC)
+11.	Def 12607 - Concur expense report program update to discontinue Barclay's payable.
+12.	Defect 13289 - Concur expense report program remove PSID
+13.	Defect 13873 - fix issue due multiple currency by remove PSID and functional didn't test
+14.	Defect 15271 - Concur to SAP Interface for OFD
+15.	Defect 17587 Need change to Concur ABAP program.
+16.	Defect 18887 Error: India co code (2130) change required in WERCCA program.
+Scenari05:
+1.	19183- Partial postings issue
+2.	 19747 Posting date format issue, Duplicate posting issue
+3.	 19773 - Concur Batch Job is posting different amounts than file
+4.	 19937 - Error: FI interface: Small difference USD 30 cannot be distributed (Concur Program)
+Scenari06:
+1754 - Fix the Currency discrepancy for Billable lines. All employee Travel Expense should post in the home currency of associate. Irrespective if Billable or not. This is true for all countries and currencies.
+
+Scenario07:
+1.	Def 6469 : Weekly expense report -  interface  calculation error
+2.	Def 9763 : Corp Card processing Concur expense report interface changes
+3.	Def 10781 : NA Corp Card - Concur update to accommodate associates with foreign cost center
+4.	Defect 15373 : GS Realignment Concur interface enhancement to derive the Region IO by  employee location.
+5.	Defect 15271 : Concur to SAP Interface for OFD
+6.	Defect 20503 : Concur OFD postings discrepancy by Batch job
+7.	Defect 1898: Changing length of company code from 4 to 5 as file is coming with leading zero along with oracle cocode
+8.	Description: Trading partner update for OFD employee while posting concur expenses.
+
+
+
+
+
+
