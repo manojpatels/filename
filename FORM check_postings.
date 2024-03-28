@@ -1,0 +1,444 @@
+FORM check_postings.
+
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+  DATA : l_xblnr TYPE xblnr1,
+         l_date  TYPE sy-datum. " defect 19183 sakota
+
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+  DATA : l_d(2) TYPE n,
+         l_m(2) TYPE n,
+         l_y(4) TYPE c.
+
+  CLEAR : wa_file , v_posting_flag.
+  LOOP AT i_file INTO wa_file.
+
+    lv_repid = wa_file-repid+0(7).
+* Begin of chenges defect 19747 sakota
+    IF p_appl = 'X'.
+      SPLIT wa_file-approal_date AT '-' INTO l_y l_m l_d.
+    ELSE.
+      SPLIT wa_file-approal_date AT '/' INTO l_m l_d l_y.
+      IF l_d < 10.
+        SHIFT l_d RIGHT.
+        OVERLAY l_d WITH '0'.
+      ENDIF.
+
+      IF l_m < 10.
+        SHIFT l_m RIGHT.
+        OVERLAY l_m WITH '0'.
+      ENDIF.
+    ENDIF.
+    CONCATENATE l_y l_m l_d INTO wa_file-approal_date.
+    CONDENSE wa_file-approal_date.
+* Begin of chenges defect 19183 sakota
+    CLEAR l_date.
+
+*    CALL FUNCTION 'CONVERT_DATE_TO_INTERNAL'
+*      EXPORTING
+*        date_external = wa_file-approal_date
+*      IMPORTING
+*        date_internal = l_date.
+*
+** End of chenges defect 19183 sakota
+    l_date =  wa_file-approal_date.
+* End of chenges defect 19747 sakota
+
+
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+    IF v_ofd_flag <> c_x.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+      "fetching company code for non ofd
+
+      DATA : lv_cc_ofs TYPE bukrs.
+      IF wa_file-emp_home_cntry NE 'UNITED STATES' AND wa_file-emp_home_cntry NE 'PUERTO RICO'.
+        IF NOT wa_file-emp_dept IS INITIAL.
+          CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+            EXPORTING
+              input  = wa_file-emp_dept
+            IMPORTING
+              output = wa_file-emp_dept.
+
+          SELECT SINGLE bukrs FROM csks INTO @DATA(lv_cc_bukrs)
+          WHERE kostl = @wa_file-emp_dept AND datbi EQ '99991231'.
+
+          IF sy-subrc NE' 0'.
+
+          ELSE.
+            lv_cc_ofs  = lv_cc_bukrs.
+          ENDIF.
+
+
+        ENDIF.
+      ELSE.
+        DATA: lv_gl_off LIKE p_gl_off,
+              lv_cc_off LIKE p_cc_off.
+        SELECT SINGLE ref1 ref2 FROM zggd_gen_xref
+              INTO (lv_gl_off,lv_cc_off) WHERE identifier = 'ERCCA_W' AND refkey1 = 'GL_ACC' AND active = 'X'.
+        lv_cc_ofs = lv_cc_off.
+      ENDIF.
+
+
+      IF wa_file-emp_home_cntry NE 'UNITED STATES' AND wa_file-emp_home_cntry NE 'PUERTO RICO'
+   AND  wa_file-rpt_custom20 IS NOT INITIAL AND  wa_file-rpt_custom20 NE 'TEMP'.
+*Previous code find the CC from the column O next select find the land1
+        SELECT SINGLE land1
+                 FROM t001
+                 INTO @DATA(lv_landcc)
+                WHERE bukrs EQ @lv_cc_ofs.
+
+        IF sy-subrc EQ 0.
+
+        ENDIF.
+
+        IF wa_file-rpt_custom20 IS NOT INITIAL.
+
+          SELECT SINGLE land1
+             FROM t001
+             INTO @DATA(lv_landbh)
+            WHERE bukrs EQ @wa_file-rpt_custom20.
+
+          IF sy-subrc EQ 0.
+
+          ENDIF.
+
+
+          IF lv_landcc NE lv_landbh.
+
+            MOVE wa_file-rpt_custom20 TO lv_cc_ofs.
+
+          ENDIF.
+
+        ENDIF.
+
+      ENDIF.
+
+
+
+      "if zm document if already posted
+
+      CLEAR : l_xblnr.
+      l_xblnr = lv_repid.
+      CONCATENATE l_xblnr wa_file-reimb_curr1 INTO l_xblnr SEPARATED BY '/'.
+      CLEAR wa_bkpf.
+*      READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = wa_file-rpt_custom11 bldat = l_date.
+      READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = lv_cc_ofs bldat = l_date.  " defect 19183 rirawat
+      IF sy-subrc = 0 AND wa_bkpf-stblg EQ space  AND ( wa_bkpf-blart = 'ZN' OR wa_bkpf-blart = 'ZM' )..    " Already Posted.
+        wa_log-msgtype        = 'E'.
+        wa_log-reference      = wa_file-repid.
+        CONCATENATE TEXT-004 wa_bkpf-belnr TEXT-005  wa_bkpf-bukrs TEXT-006 wa_bkpf-gjahr INTO  wa_log-message.
+        APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+        wa_logref-repid = wa_file-repid.
+        APPEND wa_logref TO i_logref.
+        CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+        CLEAR wa_log.
+        v_posting_flag = 'X'.
+
+
+        CLEAR wa_error_rec.
+        wa_error_rec-repid = wa_file-repid.
+        wa_error_rec-apprv_date = wa_file-approal_date.
+        wa_error_rec-temp15 = wa_file-temp15.
+
+        APPEND wa_error_rec TO it_error_rec.
+      ENDIF.
+
+      " for zn documents , we will check if employee or card employee
+      IF wa_file-temp15 EQ 'EMPLOYEE'.
+* Prepare reference string by prefixing report ID with E and suffix as Reimbursement currrency
+        CLEAR : l_xblnr.
+        CONCATENATE 'E' lv_repid INTO l_xblnr.
+        CONCATENATE l_xblnr wa_file-reimb_curr1 INTO l_xblnr SEPARATED BY '/'.
+        CLEAR wa_bkpf.
+*      READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = wa_file-rpt_custom11 bldat = l_date.
+        READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = lv_cc_ofs bldat = l_date stblg = ' '  . "defect 18193 rirawat
+
+        IF sy-subrc = 0 AND ( wa_bkpf-blart = 'ZN' OR wa_bkpf-blart = 'ZM' ).     " Already Posted.
+          wa_log-msgtype        = 'E'.
+          wa_log-reference      = wa_file-repid.
+          CONCATENATE TEXT-004 wa_bkpf-belnr TEXT-005  wa_bkpf-bukrs TEXT-006 wa_bkpf-gjahr INTO  wa_log-message.
+          APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+          wa_logref-repid = wa_file-repid.
+          APPEND wa_logref TO i_logref.
+          CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+          CLEAR wa_log.
+          v_posting_flag = 'X'.
+
+
+          CLEAR wa_error_rec.
+          wa_error_rec-repid = wa_file-repid.
+          wa_error_rec-apprv_date = wa_file-approal_date.
+          wa_error_rec-temp15 = wa_file-temp15.
+
+          APPEND wa_error_rec TO it_error_rec.
+        ENDIF.
+      ELSE.
+
+* Prepare reference string by prefixing report ID with E and suffix as Reimbursement currrency
+        CLEAR : l_xblnr.
+        CONCATENATE 'C' lv_repid INTO l_xblnr.
+        CONCATENATE l_xblnr wa_file-reimb_curr1 INTO l_xblnr SEPARATED BY '/'.
+        CLEAR wa_bkpf.
+*      READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = wa_file-rpt_custom11 bldat = l_date.
+        READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = lv_cc_ofs bldat = l_date  stblg = ' ' . "defect 18193 rirawat
+        IF sy-subrc = 0  AND ( wa_bkpf-blart = 'ZN' OR wa_bkpf-blart = 'ZM' )..    " Already Posted.
+          wa_log-msgtype        = 'E'.
+          wa_log-reference      = wa_file-repid.
+          CONCATENATE TEXT-004 wa_bkpf-belnr TEXT-005  wa_bkpf-bukrs TEXT-006 wa_bkpf-gjahr INTO  wa_log-message.
+          APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+          wa_logref-repid = wa_file-repid.
+          APPEND wa_logref TO i_logref.
+          CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+          CLEAR wa_log.
+          v_posting_flag = 'X'.
+
+
+          CLEAR wa_error_rec.
+          wa_error_rec-repid = wa_file-repid.
+          wa_error_rec-apprv_date = wa_file-approal_date.
+          wa_error_rec-temp15 = wa_file-temp15.
+
+          APPEND wa_error_rec TO it_error_rec.
+
+        ENDIF.
+      ENDIF.
+
+      CLEAR:lv_cc_ofs , lv_landbh , lv_landcc.
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+    ELSE .
+
+      DATA: lv_cc_ofd TYPE bukrs.
+      "fetching company code using pernr (employee id)"
+      READ TABLE i_pa0001 INTO DATA(ls_cc_ofd) WITH KEY pernr = wa_file-pernr.
+      IF sy-subrc = 0.
+        lv_cc_ofd = ls_cc_ofd-bukrs.
+      ENDIF.
+      IF lv_cc_ofd IS INITIAL.
+        TRANSLATE wa_file-emp_home_cntry TO UPPER CASE.
+        CASE wa_file-emp_home_cntry.
+          WHEN 'UNITED STATES'.
+
+            lv_cc_ofd = '1220'.
+          WHEN 'CANADA'.
+
+            lv_cc_ofd = '2320'.
+          WHEN 'UNITED KINGDOM'.
+
+            lv_cc_ofd = '2070'.
+          WHEN 'IRELAND'.
+
+            lv_cc_ofd = '2450'.
+          WHEN OTHERS.
+        ENDCASE.
+      ENDIF.
+
+      IF wa_file-temp15 EQ 'EMPLOYEE'.
+
+* Prepare reference string by prefixing report ID with E and suffix as Reimbursement currrency
+        CLEAR : l_xblnr.
+        CONCATENATE 'E' lv_repid INTO l_xblnr.
+        CONCATENATE l_xblnr wa_file-reimb_curr1 INTO l_xblnr SEPARATED BY '/'.
+* Check if reference exists in Acc. doc header table BKPF, then show error
+        CLEAR wa_bkpf.
+*      READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = wa_file-rpt_custom11 bldat = l_date. "sy-datum." defect 19183 sakota
+        READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = lv_cc_ofd bldat = l_date  stblg = ' ' . "sy-datum." defect rirawat
+        IF sy-subrc = 0  AND ( wa_bkpf-blart = 'ZN' OR wa_bkpf-blart = 'ZM' ).    " Already Posted.  " defect 19183 rirawat
+          wa_log-msgtype        = 'E'.
+          wa_log-reference      = l_xblnr.
+          CONCATENATE TEXT-004 wa_bkpf-belnr TEXT-005  wa_bkpf-bukrs TEXT-006 wa_bkpf-gjahr INTO  wa_log-message.
+          APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+          wa_logref-repid = l_xblnr.
+          APPEND wa_logref TO i_logref.
+          CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+          CLEAR wa_log.
+          v_posting_flag = 'X'.
+          CLEAR wa_error_rec.
+          wa_error_rec-repid = wa_file-repid.
+          wa_error_rec-apprv_date = wa_file-approal_date.
+          wa_error_rec-temp15 = wa_file-temp15.
+
+          APPEND wa_error_rec TO it_error_rec.
+
+        ENDIF.
+
+      ELSE.
+* Prepare reference string by prefixing report ID with C and suffix as Reimbursement currrency
+        CLEAR : l_xblnr.
+        CONCATENATE 'C' lv_repid INTO l_xblnr.
+        CONCATENATE l_xblnr wa_file-reimb_curr1 INTO l_xblnr SEPARATED BY '/'.
+* Check if reference is already available in previously posted document , then show error
+        CLEAR wa_bkpf.
+*        READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = wa_file-rpt_custom11 bldat = l_date. "sy-datum." defect 19183 sakota
+        READ TABLE i_bkpf INTO wa_bkpf WITH KEY xblnr = l_xblnr bukrs = lv_cc_ofd bldat = l_date  stblg = ' ' . "sy-datum." defect rirawat
+        IF sy-subrc = 0 AND ( wa_bkpf-blart = 'ZN' OR wa_bkpf-blart = 'ZM' ).      " Already Posted.  " defect 19183 rirawat
+          wa_log-msgtype        = 'E'.
+          wa_log-reference      = l_xblnr.
+          CONCATENATE TEXT-004 wa_bkpf-belnr TEXT-005  wa_bkpf-bukrs TEXT-006 wa_bkpf-gjahr INTO  wa_log-message.
+          APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+          wa_logref-repid = l_xblnr.
+          APPEND wa_logref TO i_logref.
+          CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+          CLEAR wa_log.
+          v_posting_flag = 'X'.
+          CLEAR wa_error_rec.
+          wa_error_rec-repid = wa_file-repid.
+          wa_error_rec-apprv_date = wa_file-approal_date.
+          wa_error_rec-temp15 = wa_file-temp15.
+
+          APPEND wa_error_rec TO it_error_rec.
+        ENDIF.
+
+      ENDIF.
+      CLEAR:lv_cc_ofd.
+    ENDIF.
+
+    " end of changes rirawat 19183
+
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+* PERNR Check. Error if not found.
+    CLEAR wa_pa0032.
+    READ TABLE i_pa0032 INTO wa_pa0032 WITH KEY pnalt = wa_file-pernr.
+    IF sy-subrc NE 0. " External PERNR does not exist in SAP.
+      wa_log-msgtype        = 'E'.
+      wa_log-reference      = wa_file-repid.
+      CONCATENATE 'Employee : ' wa_file-pernr ' Does not exist in SAP' INTO  wa_log-message RESPECTING BLANKS.
+      APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+      wa_logref-repid = wa_file-repid.
+      APPEND wa_logref TO i_logref.
+      CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+      CLEAR wa_log.
+      v_posting_flag = 'X'.
+
+    ENDIF.
+
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+    IF v_ofd_flag <> c_x.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+* WBS Suffix Check.
+
+      IF wa_file-charge_type2 = 'WBS BILLABLE'(010) OR wa_file-charge_type2 = 'WBS NON-BILLABLE'(011).
+        IF wa_file-charge_type IS INITIAL OR wa_file-charge_type EQ '0'.
+          wa_log-msgtype        = 'E'.
+          wa_log-reference      = wa_file-repid.
+          CONCATENATE 'WBS Element is Invalid in file' wa_file-charge_type INTO  wa_log-message.
+          APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+          wa_logref-repid = wa_file-repid.
+          APPEND wa_logref TO i_logref.
+          CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+          CLEAR wa_log.
+          v_posting_flag = 'X'.
+        ELSE.
+          DATA : wa_src_prps LIKE prps-posid.
+          CLEAR: wa_wbs,wa_prps1,lv_profl,lv_psphi,wa_src_prps.
+          MOVE wa_file-charge_type TO wa_src_prps.
+          " Conversion Routine for domain PS_POSID
+          CALL FUNCTION 'CONVERSION_EXIT_ABPSN_INPUT'
+            EXPORTING
+              input  = wa_src_prps
+            IMPORTING
+              output = wa_src_prps.
+          SELECT SINGLE psphi FROM prps INTO lv_psphi WHERE posid = wa_src_prps.
+          IF sy-subrc EQ 0.
+            SELECT SINGLE profl INTO lv_profl FROM proj WHERE pspnr EQ lv_psphi.
+            IF sy-subrc EQ 0.
+              IF lv_profl NE 'Z000004'.
+                READ TABLE i_wbs INTO wa_wbs WITH KEY exp_type =  wa_file-exp_type.
+                IF sy-subrc = 0.
+                  REPLACE ALL OCCURRENCES OF '.' IN wa_file-charge_type WITH ' ' .
+                  CONDENSE wa_file-charge_type.
+                  CONCATENATE wa_file-charge_type wa_wbs-suffix INTO wa_file-charge_type .
+                  CONDENSE wa_file-charge_type.
+                  MODIFY i_file FROM wa_file TRANSPORTING charge_type .
+                ELSE.
+                  wa_log-msgtype        = 'E'.
+                  wa_log-reference      = wa_file-repid.
+                  CONCATENATE 'Expense Type - ' wa_file-exp_type ' Does not exist in Suffix Custom Table -  ZFLGI_EXP_WBS' INTO  wa_log-message.
+                  APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+                  wa_logref-repid = wa_file-repid.
+                  APPEND wa_logref TO i_logref.
+                  CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+                  CLEAR wa_log.
+                  v_posting_flag = 'X'.
+                ENDIF.
+              ELSE.
+                MOVE wa_src_prps TO wa_file-charge_type.
+                MODIFY i_file FROM wa_file TRANSPORTING charge_type .
+              ENDIF.
+            ELSE.
+              wa_log-msgtype        = 'E'.
+              wa_log-reference      = wa_file-repid.
+              CONCATENATE 'Invalid WBS element ' wa_file-charge_type INTO  wa_log-message SEPARATED BY space.
+              APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+              wa_logref-repid = wa_file-repid.
+              APPEND wa_logref TO i_logref.
+              CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+              CLEAR wa_log.
+              v_posting_flag = 'X'.
+            ENDIF.
+          ELSE.
+            wa_log-msgtype        = 'E'.
+            wa_log-reference      = wa_file-repid.
+            CONCATENATE 'Invalid WBS element ' wa_file-charge_type INTO  wa_log-message SEPARATED BY space.
+            APPEND wa_log TO i_log.
+* Begin of Changes SAKOTA I118 DS4K901193
+            wa_logref-repid = wa_file-repid.
+            APPEND wa_logref TO i_logref.
+            CLEAR wa_logref.
+* end of Changes SAKOTA I118 DS4K901193
+            CLEAR wa_log.
+            v_posting_flag = 'X'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+    ENDIF.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+*    CLEAR wa_bukrs.
+*    READ TABLE i_bukrs INTO wa_bukrs WITH KEY psid = wa_file-psid.
+*    IF sy-subrc = 0.
+** International File with Domestic Company Code
+*      IF p_int = 'X' AND wa_bukrs-bukrs+0(1) = '1'.
+*        wa_log-msgtype        = 'E'.
+*        wa_log-reference      = wa_file-repid.
+*        CONCATENATE 'International File containing Domestic Company Code : ' wa_bukrs-bukrs ' PSID : ' wa_file-psid INTO  wa_log-message RESPECTING BLANKS.
+*        APPEND wa_log TO i_log.
+*        CLEAR wa_log.
+*        v_posting_flag = 'X'.
+*      ENDIF.
+*
+** Domestic File with International Company Code
+*      IF p_dom = 'X' AND wa_bukrs-bukrs+0(1) = '2'.
+*        wa_log-msgtype        = 'E'.
+*        wa_log-reference      = wa_file-repid.
+*        CONCATENATE 'Domestic File containing International Company Code : ' wa_bukrs-bukrs ' PSID : ' wa_file-psid INTO  wa_log-message RESPECTING BLANKS.
+*        APPEND wa_log TO i_log.
+*        CLEAR wa_log.
+*        v_posting_flag = 'X'.
+*      ENDIF.
+*
+*    ENDIF.
+    CLEAR: lv_repid.
+  ENDLOOP.
+  PERFORM delete_error_recs.   " defect 19183 removing duplicates records from file
+
+ENDFORM.           
