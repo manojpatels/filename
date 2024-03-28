@@ -1,0 +1,209 @@
+FORM fetch_company_codes .
+  IF i_file[] IS NOT INITIAL.
+    SELECT kostl bukrs FROM csks INTO TABLE i_csks FOR ALL ENTRIES IN i_file WHERE kostl = i_file-dept AND datbi GE sy-datum AND datab LE sy-datum.
+*    i_file_cc[] = i_file[] .
+*    CLEAR wa_file_cc.
+*    LOOP AT i_file_cc INTO wa_file_cc.
+*      CONDENSE wa_file_cc-charge_type.
+*      MODIFY i_file_cc FROM wa_file_cc TRANSPORTING charge_type.
+*    ENDLOOP.
+    LOOP AT i_file INTO wa_file.
+      MOVE-CORRESPONDING wa_file TO wa_file_cc.
+      APPEND wa_file_cc TO i_file_cc.
+      CLEAR wa_file_cc.
+    ENDLOOP.
+    SELECT posid pbukr FROM prps INTO TABLE i_prps FOR ALL ENTRIES IN i_file_cc WHERE posid = i_file_cc-charge_type .
+*    i_file_cc2[] = i_file[] .
+    LOOP AT i_file INTO wa_file.
+      MOVE-CORRESPONDING wa_file TO wa_file_cc2.
+      APPEND wa_file_cc2 TO i_file_cc2.
+      CLEAR wa_file_cc2.
+    ENDLOOP.
+    SELECT aufnr bukrs astkz FROM coas INTO TABLE i_coas FOR ALL ENTRIES IN i_file_cc2 WHERE aufnr = i_file_cc2-charge_type .
+  ENDIF.
+
+*{Begin of CSURYAWANSHI-09142020 : Defect 15373
+
+* Set India flag based on company code identificaiton based on Cost Center
+*  LOOP AT i_csks ASSIGNING FIELD-SYMBOL(<fs_csks>) WHERE bukrs = '2130'.
+
+  " start of chnages of rirawat defect 18887
+  REFRESH: r_india_cc.
+  CALL FUNCTION 'ZEXTRACT_TVARVC'
+    EXPORTING
+      i_name   = c_india_cc
+    TABLES
+      t_selopt = r_india_cc.
+  "end of changes of rirawat defect 18887
+  LOOP AT i_csks ASSIGNING FIELD-SYMBOL(<fs_csks>) WHERE bukrs IN r_india_cc.  " added by rirawat defect 18887
+    v_india_flg = c_x.
+    EXIT.
+  ENDLOOP.
+* Set India flag based on company code identificaiton based on WBS
+*  LOOP AT i_prps ASSIGNING FIELD-SYMBOL(<fs_prps>) WHERE pbukr = '2130'.
+  LOOP AT i_prps ASSIGNING FIELD-SYMBOL(<fs_prps>) WHERE pbukr IN r_india_cc.   " added by rirawat defect 18887
+    v_india_flg = c_x.
+    EXIT.
+  ENDLOOP.
+* Set India flag based on company code identificaiton based on Internal order
+*  LOOP AT i_coas ASSIGNING FIELD-SYMBOL(<fs_coas>) WHERE bukrs = '2130'.
+  LOOP AT i_coas ASSIGNING FIELD-SYMBOL(<fs_coas>) WHERE bukrs IN r_india_cc.  " added by rirawat defect 18887
+    v_india_flg = c_x.
+    EXIT.
+  ENDLOOP.
+
+* Get Profit Center and Internal Orders for India from cross ref. table ZGGD_GEN_XREF
+  SELECT
+     identifier                                    " Xreference Identifier
+     refkey1                                       " Cross reference Key   ( Corproate card used for payment of expenses )
+     refkey2                                       " Cross reference Key   ( Company code of Employee in expense reprot )
+     ref1                                          " Cross Reference Field ( Comp code of Corporate Card )
+  FROM zggd_gen_xref                               " Generic Cross reference
+  INTO TABLE it_ind_bspl
+  WHERE identifier IN ( c_identif_bs , c_identif_pl ).                " Xreference Identifier
+  IF sy-subrc = 0.
+    SORT it_ind_bspl BY identifier
+                        refkey1
+                        refkey2 .
+  ENDIF.
+* Fetch all GL accounts in 2101 company code
+  SELECT
+    bukrs	"	Company Code
+    saknr	"	G/L Account Number
+  FROM skb1
+  INTO TABLE i_skb1
+  WHERE bukrs = c_ind_compcode.
+  IF sy-subrc = 0.
+
+    SORT i_skb1 BY bukrs.
+
+* Fetch GL account master to check if the account is Balance Sheet account or Profit Center account
+    SELECT
+      ktopl	"	Chart of Accounts
+      saknr	"	G/L Account Number
+      xbilk	"	Indicator: Account Is a Balance Sheet Account?
+      sakan	"	G/L account number, significant length
+      gvtyp	"	P&L Statement Account Type
+      xloev	"	Indicator: Account marked for deletion?
+     FROM ska1
+     INTO TABLE i_ska1
+     FOR ALL ENTRIES IN i_skb1
+     WHERE ktopl = c_ktopl
+      AND  saknr = i_skb1-saknr
+      AND  xloev <> c_x.
+    IF sy-subrc = 0.
+      SORT i_ska1 BY saknr.
+    ENDIF.
+
+  ENDIF.
+
+* Get Employee organization key from employee master
+  IF i_pa0032[] IS NOT INITIAL.
+    SELECT
+      pernr	"	Personnel number
+      subty	"	Subtype
+      objps	"	Object Identification
+      sprps	"	Lock Indicator for HR Master Data Record
+      endda	"	End Date
+      begda	"	Start Date
+      seqnr	"	Number of Infotype Record with Same Key
+      vdsk1	"	Organizational Key
+    FROM pa0001
+      INTO TABLE i_org_keys
+      FOR ALL ENTRIES IN i_pa0032
+      WHERE pernr = i_pa0032-pernr.
+    IF sy-subrc = 0.
+      SORT i_org_keys BY pernr endda DESCENDING begda DESCENDING.
+    ENDIF.
+  ENDIF.
+*}End of CSURYAWANSHI-09142020 : Defect 15373
+
+ENDFORM.                    " FETCH_COMPANY_CODES
+*&---------------------------------------------------------------------*
+*&      Form  FETCH_WBS_SUFFIX
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fetch_wbs_suffix .
+  SELECT exp_type suffix FROM zflgi_exp_wbs INTO TABLE i_wbs. " No Key. All records wanted.
+ENDFORM.                    " FETCH_WBS_SUFFIX
+*&---------------------------------------------------------------------*
+*&      Form  FETCH_PERNR
+*&---------------------------------------------------------------------*
+FORM fetch_pernr .
+  REFRESH i_pa0032.
+  SELECT pernr pnalt endda FROM pa0032 INTO TABLE i_pa0032 FOR ALL ENTRIES IN i_file WHERE pnalt = i_file-pernr."AND ENDDA EQ '99991231'. " Defect 3398
+  SORT i_pa0032 BY endda DESCENDING. "Defect 3840
+
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+* If employee belong to Original First Data
+  IF v_ofd_flag = c_x.
+* Get HR Infotype 0001 data for employee
+    IF i_pa0032[] IS NOT INITIAL.
+      SELECT
+        pernr         " Personnel number
+        endda         " End Date
+        begda         " Start Date
+        bukrs         " Company Code
+        kostl         " Cost Center
+      FROM pa0001
+      INTO TABLE i_pa0001
+      FOR ALL ENTRIES IN i_pa0032
+      WHERE pernr = i_pa0032-pernr.
+      IF sy-subrc = 0.
+        SORT i_pa0001 BY endda DESCENDING.
+* Get cost center master data for company code , profit center values
+        SELECT
+          kokrs       " Controlling Area
+          kostl       " Cost Center
+          datbi       " Valid To Date
+          bukrs       " Company Code
+          prctr       " Profit Center
+        FROM csks     " Cost Center Master Data
+        INTO TABLE i_csks_ofd
+        FOR ALL ENTRIES IN i_pa0001
+        WHERE kostl = i_pa0001-kostl AND
+              datbi GE sy-datum     AND
+              datab LE sy-datum.
+        IF sy-subrc = 0.
+          SORT i_csks_ofd BY kostl.
+        ENDIF.
+
+      ENDIF.
+    ENDIF.
+    " start of defect 17587 rirawat 12/23/2021
+    LOOP AT i_file ASSIGNING FIELD-SYMBOL(<fs_file1>).
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = <fs_file1>-temp18
+        IMPORTING
+          output = <fs_file1>-temp18.
+    ENDLOOP.
+    " end of defect 17587 rirawat 12/23/2021
+* Get cost centers based on cost center charged
+    IF i_file[] IS NOT INITIAL.
+      SELECT
+        kokrs       " Controlling Area
+        kostl       " Cost Center
+        datbi       " Valid To Date
+        bukrs       " Company Code
+        prctr       " Profit Center
+      FROM csks     " Cost Center Master Data
+      APPENDING TABLE i_csks_ofd
+      FOR ALL ENTRIES IN i_file
+      WHERE kostl = i_file-temp18 AND
+            datbi GE sy-datum     AND
+            datab LE sy-datum.
+      IF sy-subrc = 0.
+        SORT i_csks_ofd BY kostl.
+        DELETE ADJACENT DUPLICATES FROM i_csks_ofd COMPARING kostl.
+      ENDIF.
+    ENDIF.
+
+  ENDIF.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+ENDFORM.  
