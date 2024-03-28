@@ -1,0 +1,263 @@
+FORM fetch_bkpf .
+  DATA lv_date TYPE sy-datum.
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+  IF v_ofd_flag <> c_x.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+
+    REFRESH i_file_bkpf[].
+    i_file_bkpf[] = i_file[].
+    DATA wa_bkpf_new TYPE t_bkpf_new.
+    DATA : l_d(2) TYPE n,
+           l_m(2) TYPE n,
+           l_y(4) TYPE c.
+
+    SORT i_file_bkpf BY repid.
+    " for fetcthing ZM documents
+    IF i_file_bkpf[] IS NOT INITIAL.
+      LOOP AT i_file_bkpf INTO DATA(wa_file_bkpf).
+        wa_bkpf_new-repid = wa_file_bkpf-repid.
+        CLEAR lv_date.
+* start of changes defect 19747 SAKOTA
+        IF p_appl = 'X'.
+          "Begin of defect 20134 FCJSJ22 14/11/2022
+*          SPLIT wa_file_bkpf-appr_date AT '-' INTO l_y l_m l_d.
+          SPLIT wa_file_bkpf-batch_date AT '-' INTO l_y l_m l_d.
+        ELSE.
+*          SPLIT wa_file_bkpf-appr_date AT '/' INTO l_m l_d l_y.
+          SPLIT wa_file_bkpf-batch_date AT '/' INTO l_m l_d l_y.
+          "End of defect 20134 FCJSJ22 14/11/2022
+
+          IF l_d < 10.
+            SHIFT l_d RIGHT.
+            OVERLAY l_d WITH '0'.
+          ENDIF.
+
+          IF l_m < 10.
+            SHIFT l_m RIGHT.
+            OVERLAY l_m WITH '0'.
+          ENDIF.
+        ENDIF.
+
+        "Begin of defect 20134 FCJSJ22 14/11/2022
+*        CONCATENATE l_y l_m l_d INTO wa_file_bkpf-appr_date.
+*        CONDENSE wa_file_bkpf-appr_date.
+*        wa_bkpf_new-budat = wa_file_bkpf-appr_date.
+        CONCATENATE l_y l_m l_d INTO wa_file_bkpf-batch_date.
+        CONDENSE wa_file_bkpf-batch_date.
+        wa_bkpf_new-budat = wa_file_bkpf-batch_date.
+        "End of defect 20134 FCJSJ22 14/11/2022
+
+
+*        CALL FUNCTION 'CONVERT_DATE_TO_INTERNAL'
+*          EXPORTING
+*            date_external = wa_file_bkpf-appr_date
+*          IMPORTING
+*            date_internal = wa_bkpf_new-budat.
+* End of changes defect 19747 SAKOTA
+
+        APPEND wa_bkpf_new TO i_bkpf_new.
+        CLEAR:wa_file_bkpf, wa_bkpf_new.
+      ENDLOOP.
+      SELECT  bukrs,
+              belnr,
+              gjahr,
+              blart,
+              bldat, "19183 SAKOTA
+              xblnr,
+              stblg " reversal reference document
+                   " FROM bkpf INTO TABLE @DATA(i_bkpf_zm) FOR ALL ENTRIES IN @i_file_bkpf WHERE
+                     FROM bkpf INTO TABLE @DATA(i_bkpf_zm) FOR ALL ENTRIES IN @i_bkpf_new WHERE
+                                                                    xblnr = @i_bkpf_new-repid AND "@i_file_bkpf-repid AND "19183
+                                                                    blart = @p_doctyp AND   " changing p_doctyp to lv_doctyp changes 19183 rirawat
+                                                                    "budat = @p_posdat. defect 19183 sakota
+                                                                    budat = @i_bkpf_new-budat."defect 19183 sakota
+
+    ENDIF.
+
+* sart of changes defect 19183 rirawat for fecthing ZN documents
+    LOOP AT i_file_bkpf ASSIGNING FIELD-SYMBOL(<fs_bkpf>).
+      IF <fs_bkpf>-temp15 EQ 'EMPLOYEE'.
+        CONCATENATE 'E' <fs_bkpf>-repid  INTO <fs_bkpf>-repid.
+      ELSE.
+        CONCATENATE 'C' <fs_bkpf>-repid  INTO <fs_bkpf>-repid.
+      ENDIF.
+    ENDLOOP.
+
+    DATA(lv_doctyp) = 'ZN'.  " to pick ZN doc and check if they exists.
+* start of changes defect 19747 SAKOTA
+    IF p_appl = 'X'.
+      "Begin of defect 20134 FCJSJ22 14/11/2022
+*      SPLIT <fs_bkpf>-appr_date AT '-' INTO l_y l_m l_d.
+      SPLIT <fs_bkpf>-batch_date AT '-' INTO l_y l_m l_d.
+    ELSE.
+*      SPLIT <fs_bkpf>-appr_date AT '/' INTO l_m l_d l_y.
+      SPLIT <fs_bkpf>-batch_date AT '/' INTO l_m l_d l_y.
+      "End of defect 20134 FCJSJ22 14/11/2022
+      IF l_d < 10.
+        SHIFT l_d RIGHT.
+        OVERLAY l_d WITH '0'.
+      ENDIF.
+
+      IF l_m < 10.
+        SHIFT l_m RIGHT.
+        OVERLAY l_m WITH '0'.
+      ENDIF.
+    ENDIF.
+    "Begin of defect 20134 FCJSJ22 14/11/2022
+*    CONCATENATE l_y l_m l_d INTO <fs_bkpf>-appr_date.
+    CONCATENATE l_y l_m l_d INTO <fs_bkpf>-batch_date.
+*    CONDENSE <fs_bkpf>-appr_date.
+    CONDENSE <fs_bkpf>-batch_date.
+    CLEAR lv_date.
+*    lv_date = <fs_bkpf>-appr_date.
+    lv_date = <fs_bkpf>-batch_date.
+    "End of defect 20134 FCJSJ22 14/11/2022
+
+*    CALL FUNCTION 'CONVERT_DATE_TO_INTERNAL'
+*      EXPORTING
+*        date_external = <fs_bkpf>-appr_date
+*      IMPORTING
+*        date_internal = lv_date.
+* End of changes defect 19747 SAKOTA
+
+* end of changes defect 19183
+
+    DELETE ADJACENT DUPLICATES FROM i_file_bkpf COMPARING repid.
+    IF i_file_bkpf[] IS NOT INITIAL.
+      REFRESH: i_bkpf_new.
+      CLEAR wa_bkpf_new.
+      LOOP AT i_file_bkpf INTO DATA(wa_file_bkpf2).
+        wa_bkpf_new-repid = wa_file_bkpf2-repid.
+* start of changes defect 19747 SAKOTA
+        IF p_appl = 'X'.
+          "Begin of defect 20134 FCJSJ22 14/11/2022
+*          SPLIT wa_file_bkpf2-appr_date AT '-' INTO l_y l_m l_d.
+          SPLIT wa_file_bkpf2-batch_date AT '-' INTO l_y l_m l_d.
+        ELSE.
+*          SPLIT wa_file_bkpf2-appr_date AT '/' INTO l_m l_d l_y.
+          SPLIT wa_file_bkpf2-batch_date AT '/' INTO l_m l_d l_y.
+          "End of defect 20134 FCJSJ22 14/11/2022
+
+          IF l_d < 10.
+            SHIFT l_d RIGHT.
+            OVERLAY l_d WITH '0'.
+          ENDIF.
+
+          IF l_m < 10.
+            SHIFT l_m RIGHT.
+            OVERLAY l_m WITH '0'.
+          ENDIF.
+        ENDIF.
+        "Begin of defect 20134 FCJSJ22 14/11/2022
+*        CONCATENATE l_y l_m l_d INTO wa_file_bkpf2-appr_date.
+*        CONDENSE wa_file_bkpf2-appr_date.
+*        wa_bkpf_new-budat = wa_file_bkpf2-appr_date.
+        CONCATENATE l_y l_m l_d INTO wa_file_bkpf2-batch_date.
+        CONDENSE wa_file_bkpf2-batch_date.
+        wa_bkpf_new-budat = wa_file_bkpf2-batch_date.
+        "End of defect 20134 FCJSJ22 14/11/2022
+
+        CLEAR lv_date.
+*        CALL FUNCTION 'CONVERT_DATE_TO_INTERNAL'
+*          EXPORTING
+*            date_external = wa_file_bkpf2-appr_date
+*          IMPORTING
+*            date_internal = wa_bkpf_new-budat.
+
+* End of changes defect 19747 SAKOTA
+
+        APPEND wa_bkpf_new TO i_bkpf_new.
+        CLEAR:wa_file_bkpf2, wa_bkpf_new.
+      ENDLOOP.
+
+      SELECT  bukrs
+              belnr
+              gjahr
+              blart
+              bldat "19183 SAKOTA
+              xblnr
+              stblg " reversal reference document
+                    "FROM bkpf INTO TABLE i_bkpf FOR ALL ENTRIES IN i_file_bkpf WHERE
+                    FROM bkpf INTO TABLE i_bkpf FOR ALL ENTRIES IN i_bkpf_new WHERE
+                                                                    xblnr = i_bkpf_new-repid AND
+                                                                    blart = lv_doctyp AND   " changing p_doctyp to lv_doctyp changes 19183 rirawat
+                                                                    "budat = p_posdat. "defect 19183 sakota
+                                                                    budat = i_bkpf_new-budat."defect 19183 sakota
+
+      APPEND LINES OF i_bkpf_zm TO i_bkpf.
+    ENDIF.
+* Begin of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+  ELSE.
+* Temporary table with Employee payment
+    REFRESH i_file_bkpf[].
+    i_file_bkpf[] = i_file_emp[].
+* Temorary table with card payment data
+    IF i_file_card[] IS NOT INITIAL.
+      APPEND LINES OF i_file_card TO i_file_bkpf.
+      CLEAR : i_file_card.
+    ENDIF.
+* Get unique entries of Report IDs
+    SORT i_file_bkpf BY repid.
+    DELETE ADJACENT DUPLICATES FROM i_file_bkpf COMPARING repid.
+    IF i_file_bkpf[] IS NOT INITIAL.
+      REFRESH i_bkpf_new.
+      LOOP AT i_file_bkpf INTO DATA(wa_file_bkpf1).
+        wa_bkpf_new-repid = wa_file_bkpf1-repid.
+* start of changes defect 19747 SAKOTA
+        IF p_appl = 'X'.
+          "Begin of defect 20134 FCJSJ22 14/11/2022
+*          SPLIT wa_file_bkpf1-appr_date AT '-' INTO l_y l_m l_d.
+          SPLIT wa_file_bkpf1-batch_date AT '-' INTO l_y l_m l_d.
+        ELSE.
+*          SPLIT wa_file_bkpf1-appr_date AT '/' INTO l_m l_d l_y.
+          SPLIT wa_file_bkpf1-batch_date AT '/' INTO l_m l_d l_y.
+          "Begin of defect 20134 FCJSJ22 14/11/2022
+
+          IF l_d < 10.
+            SHIFT l_d RIGHT.
+            OVERLAY l_d WITH '0'.
+          ENDIF.
+
+          IF l_m < 10.
+            SHIFT l_m RIGHT.
+            OVERLAY l_m WITH '0'.
+          ENDIF.
+        ENDIF.
+        "Begin of defect 20134 FCJSJ22 14/11/2022
+*        CONCATENATE l_y l_m l_d INTO wa_file_bkpf1-appr_date.
+*        CONDENSE wa_file_bkpf1-appr_date.
+        CONCATENATE l_y l_m l_d INTO wa_file_bkpf1-batch_date.
+        CONDENSE wa_file_bkpf1-batch_date.
+
+        CLEAR lv_date.
+*        wa_bkpf_new-budat = wa_file_bkpf1-appr_date.
+        wa_bkpf_new-budat = wa_file_bkpf1-batch_date.
+        "End of defect 20134 FCJSJ22 14/11/2022
+
+*        CALL FUNCTION 'CONVERT_DATE_TO_INTERNAL'
+*          EXPORTING
+*            date_external = wa_file_bkpf1-appr_date
+*          IMPORTING
+*            date_internal = wa_bkpf_new-budat.
+* End of changes defect 19747 SAKOTA
+
+        APPEND wa_bkpf_new TO i_bkpf_new.
+        CLEAR:wa_file_bkpf1, wa_bkpf_new.
+      ENDLOOP.
+* Check Accounting Document header data to see if Reference document is already posted in system
+      SELECT  bukrs
+              belnr
+              gjahr
+              blart
+              bldat "19183 SAKOTA
+              xblnr
+              stblg " reversal reference document
+                   " FROM bkpf INTO TABLE i_bkpf FOR ALL ENTRIES IN i_file_bkpf WHERE
+                    FROM bkpf INTO TABLE i_bkpf FOR ALL ENTRIES IN i_bkpf_new WHERE
+                                                                    xblnr = i_bkpf_new-repid AND
+                                                                    blart = pdoctyp1 AND
+                                                                    "budat = p_posdat. "defect 19183 sakota
+                                                                    budat = i_bkpf_new-budat."defect 19183 sakota
+    ENDIF.
+* End of addition by CSURYAWANSHI on 07/08/2020 : Defect 15271
+  ENDIF.
